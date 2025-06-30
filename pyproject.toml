@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["coordax"]
+
+[project]
+name = "Coordax"
+version = "0.1.0"  # keep sync with __init__.py
+description = "Coordinate axes for scientific computing in JAX"
+authors = [
+    {name = "Google LLC", email = "noreply@google.com"},
+]
+readme = "README.md"
+license = {file = "LICENSE"}
+requires-python = ">=3.12"
+dependencies = [
+    "chex",
+    "jax",
+    "numpy",
+    "treescope",
+    "xarray",
+]
+
+[project.optional-dependencies]
+complete = [
+    "jax-datetime",
+]
+tests = [
+    "absl-py",
+    "pytest",
+]
