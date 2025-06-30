@@ -6,15 +6,15 @@ build-backend = "setuptools.build_meta"
 packages = ["coordax"]
 
 [project]
-name = "Coordax"
-version = "0.1.0"  # keep sync with __init__.py
+name = "coordax"
+version = "0.1.1"  # keep sync with __init__.py
 description = "Coordinate axes for scientific computing in JAX"
 authors = [
     {name = "Google LLC", email = "noreply@google.com"},
 ]
 readme = "README.md"
 license = {file = "LICENSE"}
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 dependencies = [
     "chex",
     "jax",

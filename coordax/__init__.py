@@ -44,4 +44,4 @@ from coordax.ndarrays import (
     register_ndarray as register_ndarray,
 )
 
-__version__ = "0.1.0"  # keep sync with pyproject.toml
+__version__ = "0.1.1"  # keep sync with pyproject.toml
