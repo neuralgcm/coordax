@@ -24,7 +24,7 @@ dependencies = [
 ]
 
 [project.urls]
-source-code = "https://github.com/neuralgcm/coordax"
+source = "https://github.com/neuralgcm/coordax"
 
 [project.optional-dependencies]
 complete = [
