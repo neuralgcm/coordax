@@ -199,6 +199,13 @@ class FieldTest(parameterized.TestCase):
           full_unwrap=False,
       ),
       dict(
+          testcase_name='names_&_dummy_axes',
+          array=np.arange(2 * 3).reshape((2, 3)),
+          tags=('x', 'y'),
+          untags=(coordax.DummyAxis('x', 2), coordax.DummyAxis('y', 3)),
+          full_unwrap=True,
+      ),
+      dict(
           testcase_name='product_coord_&_product_coord',
           array=np.arange(2 * 3).reshape((2, 3)),
           tags=(

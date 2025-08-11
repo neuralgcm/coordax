@@ -437,7 +437,7 @@ class Field:
     """Validate that given coordinates are all found on this field."""
     axes = []
     for part in dims_or_coords:
-      if isinstance(part, Coordinate):
+      if isinstance(part, Coordinate) and not isinstance(part, DummyAxis):
         axes.extend(part.axes)
 
     for c in axes:
