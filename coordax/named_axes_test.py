@@ -116,7 +116,8 @@ class NamedAxesTest(parameterized.TestCase):
     ):
       named_axes.NamedArray(np.zeros((2, 5)), ('x',))
     with self.assertRaisesRegex(
-        ValueError, re.escape(r'dimension names may not be repeated')
+        ValueError,
+        re.escape(r"dimension names may not be repeated: ('x', 'x')"),
     ):
       named_axes.NamedArray(np.zeros((2, 5)), ('x', 'x'))
 
@@ -469,15 +470,14 @@ class NamedAxesTest(parameterized.TestCase):
     other = named_axes.NamedArray(np.ones((2, 1, 5, 2)), ('q', 'd', 'y', 'x'))
     expected = named_axes.NamedArray(
         np.tile(data.T[np.newaxis, np.newaxis, ...], (2, 1, 1, 1)),
-        ('q', 'd', 'y', 'x')
+        ('q', 'd', 'y', 'x'),
     )
     actual = array.broadcast_like(other)
     assert_named_array_equal(actual, expected)
 
     other = named_axes.NamedArray(np.ones((2, 5, 2)), (None, 'y', 'x'))
     expected = named_axes.NamedArray(
-        np.tile(data.T[np.newaxis, ...], (2, 1, 1)),
-        (None, 'y', 'x')
+        np.tile(data.T[np.newaxis, ...], (2, 1, 1)), (None, 'y', 'x')
     )
     actual = array.broadcast_like(other)
     assert_named_array_equal(actual, expected)
@@ -732,6 +732,7 @@ class NamedAxesTest(parameterized.TestCase):
         leaves = [x.a if isinstance(x, NonPytree) else x for x in leaves]
         args = jax.tree.unflatten(argdef, leaves)
         return jax.vmap(fun, in_axes, out_axes, **kwargs)(*args)
+
       return mapped_fun
 
     def foo(x, y):
@@ -751,8 +752,7 @@ class NamedAxesTest(parameterized.TestCase):
     with self.assertRaisesRegex(
         ValueError,
         re.escape(
-            "out_axes keys ['x'] must match the named "
-            "dimensions ['x', 'y']"
+            "out_axes keys ['x'] must match the named dimensions ['x', 'y']"
         ),
     ):
       named_axes.nmap(lambda x: x, out_axes={'x': 0})(array)
@@ -946,14 +946,14 @@ class NamedAxesTest(parameterized.TestCase):
     actual = array.tag('x').broadcast_like(other)
     expected = named_axes.NamedArray(
         Duck(a=jnp.array([[1, 1], [2, 2]]), b=jnp.array([[3, 3], [4, 4]])),
-        dims=('x', 'y')
+        dims=('x', 'y'),
     )
     chex.assert_trees_all_equal(actual, expected)
 
     actual = array.tag('y').broadcast_like(other)
     expected = named_axes.NamedArray(
         Duck(a=jnp.array([[1, 2], [1, 2]]), b=jnp.array([[3, 4], [3, 4]])),
-        dims=('x', 'y')
+        dims=('x', 'y'),
     )
     chex.assert_trees_all_equal(actual, expected)
 

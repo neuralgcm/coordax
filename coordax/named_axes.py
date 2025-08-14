@@ -560,7 +560,7 @@ class NamedArray:
         raise ValueError(f'{data.ndim=} != {len(dims)=}')
       named_dims = [dim for dim in dims if dim is not None]
       if len(set(named_dims)) < len(named_dims):
-        raise ValueError('dimension names may not be repeated: {dims}')
+        raise ValueError(f'dimension names may not be repeated: {dims}')
     self._data = data
     self._dims = dims
 
