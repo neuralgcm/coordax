@@ -132,6 +132,12 @@ class FieldTest(parameterized.TestCase):
           np.zeros(3), dims=('x',), axes={'x': coordax.SizedAxis('x', 4)}
       )
 
+  def test_field_coordinate_property(self):
+    x = coordax.LabeledAxis('x', np.arange(2))
+    field = coordax.wrap(np.zeros((2, 3)), x, 'y')
+    expected_coord = coordax.compose_coordinates(x, coordax.DummyAxis('y', 3))
+    self.assertEqual(field.coordinate, expected_coord)
+
   def test_field_treedef_independent_of_tag_order(self):
     x, y = coordax.SizedAxis('x', 2), coordax.SizedAxis('y', 3)
     field_a = coordax.wrap(np.ones((2, 3)), None, y)

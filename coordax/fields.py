@@ -353,8 +353,13 @@ class Field:
 
   @property
   def axes(self) -> dict[str, Coordinate]:
-    """The coordinate axes associated with this field."""
+    """This field's coordinates, as a dict of 1d coordinates."""
     return self._axes
+
+  @property
+  def coordinate(self) -> Coordinate:
+    """This field's coordinate, as a single Coordinate object."""
+    return get_coordinate(self)
 
   @property
   def data(self) -> Array:
