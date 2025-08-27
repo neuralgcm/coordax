@@ -25,7 +25,7 @@ import operator
 from typing import Any, Callable, Literal, Self, TypeAlias, TypeGuard, TypeVar
 
 from coordax import coordinate_systems
-from coordax import named_axes
+from coordax import named_axes as named_axes_lib
 from coordax import ndarrays
 from coordax import utils
 import jax
@@ -137,7 +137,7 @@ def _cmap_with_doc(
         else:
           all_axes[dim_name] = c
     named_array_leaves = [x.named_array if is_field(x) else x for x in leaves]
-    fun_on_named_arrays = named_axes.nmap(fun, out_axes=out_axes, vmap=vmap)
+    fun_on_named_arrays = named_axes_lib.nmap(fun, out_axes=out_axes, vmap=vmap)
     na_args, na_kwargs = jax.tree.unflatten(treedef, named_array_leaves)
     result = fun_on_named_arrays(*na_args, **na_kwargs)
 
@@ -147,7 +147,9 @@ def _cmap_with_doc(
           axes={k: all_axes[k] for k in leaf.dims if k in all_axes},
       )
 
-    return jax.tree.map(_wrap_field, result, is_leaf=named_axes.is_namedarray)
+    return jax.tree.map(
+        _wrap_field, result, is_leaf=named_axes_lib.is_namedarray
+    )
 
   docstr = (
       f'Dimension-vectorized version of `{fun_name}`. Takes similar arguments'
@@ -160,7 +162,7 @@ def _cmap_with_doc(
 
 
 def _check_valid(
-    named_array: named_axes.NamedArray, axes: dict[str, Coordinate]
+    named_array: named_axes_lib.NamedArray, axes: dict[str, Coordinate]
 ) -> None:
   """Checks that the field coordinates and dimension names are consistent."""
 
@@ -258,7 +260,7 @@ def _in_treescope_abbreviation_mode() -> bool:
 class Field:
   """An array with optional named dimensions and associated coordinates."""
 
-  _named_array: named_axes.NamedArray
+  _named_array: named_axes_lib.NamedArray
   _axes: dict[str, Coordinate]
 
   def __init__(
@@ -278,7 +280,7 @@ class Field:
       axes: optional mapping from dimension names to associated
         `coordax.Coordinate` objects.
     """
-    self._named_array = named_axes.NamedArray(data, dims)
+    self._named_array = named_axes_lib.NamedArray(data, dims)
     if axes is None:
       self._axes = {}
     else:
@@ -288,7 +290,7 @@ class Field:
   @classmethod
   def from_namedarray(
       cls,
-      named_array: named_axes.NamedArray,
+      named_array: named_axes_lib.NamedArray,
       axes: dict[str, Coordinate] | None = None,
   ) -> Self:
     """Creates a Field from a named array."""
@@ -347,7 +349,7 @@ class Field:
     return xarray.DataArray(data=data, dims=self.dims, coords=coords)
 
   @property
-  def named_array(self) -> named_axes.NamedArray:
+  def named_array(self) -> named_axes_lib.NamedArray:
     """The value of the underlying named array."""
     return self._named_array
 
@@ -518,17 +520,13 @@ class Field:
 
     def _make_label():
       # reuse dim/shape summary from the underlying NamedArray.
-      attrs, summary, _ = named_axes.attrs_summary_type(
-          self.named_array, False
-      )
+      attrs, summary, _ = named_axes_lib.attrs_summary_type(self.named_array, False)
       axes_attrs = _axes_attrs(self)
       attrs = ' '.join([attrs, f'axes={axes_attrs}'])
 
       return rendering_parts.summarizable_condition(
           summary=rendering_parts.abbreviation_color(  # non-expanded repr.
-              rendering_parts.text(
-                  f'<{type(self).__name__} {attrs} {summary}>'
-              )
+              rendering_parts.text(f'<{type(self).__name__} {attrs} {summary}>')
           ),
           detail=rendering_parts.siblings(
               rendering_parts.text(f'<{type(self).__name__} ('),
@@ -558,14 +556,14 @@ class Field:
     """Treescope handler for named arrays."""
 
     def _summary_fn(field, inspect_data):
-      attrs, array_summary, data_type = named_axes.attrs_summary_type(
+      attrs, array_summary, data_type = named_axes_lib.attrs_summary_type(
           field.named_array, inspect_data
       )
       axes_attrs = _axes_attrs(field)
       attrs = ', '.join([attrs, f'axes={axes_attrs}'])
       return attrs, array_summary, data_type
 
-    return named_axes.NamedArrayAdapter(_summary_fn)
+    return named_axes_lib.NamedArrayAdapter(_summary_fn)
 
   # Convenience wrappers: Elementwise infix operators.
   __lt__ = _cmap_with_doc(operator.lt, 'jax.Array.__lt__')
