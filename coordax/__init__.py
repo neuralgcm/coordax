@@ -43,5 +43,6 @@ from coordax.ndarrays import (
     NDArray as NDArray,
     register_ndarray as register_ndarray,
 )
+import coordax.testing
 
 __version__ = "0.1.3"  # keep sync with pyproject.toml

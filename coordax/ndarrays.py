@@ -27,8 +27,9 @@ except ImportError:
   jax_datetime = None
 
 
+# TODO(shoyer): should this be a protocol?
 class NDArray(abc.ABC):
-  """Base class for non-JAX arrays that can be used with Coordax.
+  """Abstract base class for non-JAX arrays that can be used with Coordax.
 
   To register a new NDArray, use `coordax.register_ndarray()`.
 
@@ -129,7 +130,6 @@ def register_ndarray(
   _TO_NUMPY_FUNCS.append((array_type, to_numpy))
   _FROM_NUMPY_FUNCS.append((is_matching_numpy_array, from_numpy))
   return array_type
-
 
 
 if jax_datetime is not None:

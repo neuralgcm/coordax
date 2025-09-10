@@ -30,4 +30,5 @@ The best place to ask for help or report bugs is
 :maxdepth: 1
 installation.md
 quickstart.ipynb
+api.md
 ```
