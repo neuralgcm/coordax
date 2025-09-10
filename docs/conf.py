@@ -79,7 +79,7 @@ html_theme_options = {
     'source_repository': 'https://github.com/neuralgcm/coordax/',
     'source_branch': 'main',
     'source_directory': 'docs/',
-    'sidebar_hide_name': True,
+    'sidebar_hide_name': False,
     # 'light_logo': 'coordax-logo-light.png',
     # 'dark_logo': 'coordax-logo-dark.png',
 }

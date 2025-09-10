@@ -1,4 +1,4 @@
-# Coordax: coordinate Axes for scientific computing in JAX
+# Coordax: Coordinate axes for scientific computing in JAX
 
 Authors: Dmitrii Kochkov and Stephan Hoyer
 
