@@ -94,7 +94,10 @@ html_static_path = ['_static']
 autosummary_generate = True
 
 # https://myst-nb.readthedocs.io/en/latest/computation/execute.html
-nb_execution_mode = 'off'
+nb_execution_mode = 'auto'
+
+# Hide tracekbacks in notebooks, so errors are tidier.
+nb_execution_show_tb = False
 
 # https://www.sphinx-doc.org/en/master/usage/extensions/autodoc.html#confval-autodoc_typehints
 autodoc_typehints = 'signature'
