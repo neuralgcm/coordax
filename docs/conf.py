@@ -96,8 +96,8 @@ autosummary_generate = True
 # https://myst-nb.readthedocs.io/en/latest/computation/execute.html
 nb_execution_mode = 'auto'
 
-# Hide tracekbacks in notebooks, so errors are tidier.
-nb_execution_show_tb = False
+# build should fail if there are unexpected errors
+nb_execution_raise_on_error = True
 
 # https://www.sphinx-doc.org/en/master/usage/extensions/autodoc.html#confval-autodoc_typehints
 autodoc_typehints = 'signature'
