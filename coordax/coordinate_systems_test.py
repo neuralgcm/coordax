@@ -250,6 +250,82 @@ class CoordinateSystemsTest(parameterized.TestCase):
     actual = coordinate_systems.compose(*coordinates)
     self.assertEqual(actual, expected)
 
+  @parameterized.named_parameters(
+      dict(
+          testcase_name='insert_at_start',
+          indices_to_axes={0: coordax.SizedAxis('w', 4)},
+          coordinate=PRODUCT_XY,
+          expected=coordax.CartesianProduct((
+              coordax.SizedAxis('w', 4),
+              coordax.SizedAxis('x', 2),
+              coordax.SizedAxis('y', 3),
+          )),
+      ),
+      dict(
+          testcase_name='insert_at_end',
+          indices_to_axes={2: coordax.SizedAxis('w', 4)},
+          coordinate=PRODUCT_XY,
+          expected=coordax.CartesianProduct((
+              coordax.SizedAxis('x', 2),
+              coordax.SizedAxis('y', 3),
+              coordax.SizedAxis('w', 4),
+          )),
+      ),
+      dict(
+          testcase_name='insert_in_middle',
+          indices_to_axes={1: coordax.SizedAxis('w', 4)},
+          coordinate=PRODUCT_XY,
+          expected=coordax.CartesianProduct((
+              coordax.SizedAxis('x', 2),
+              coordax.SizedAxis('w', 4),
+              coordax.SizedAxis('y', 3),
+          )),
+      ),
+      dict(
+          testcase_name='insert_multiple',
+          indices_to_axes={
+              0: coordax.SizedAxis('w', 4),
+              2: coordax.SizedAxis('z', 5),
+          },
+          coordinate=PRODUCT_XY,
+          expected=coordax.CartesianProduct((
+              coordax.SizedAxis('w', 4),
+              coordax.SizedAxis('x', 2),
+              coordax.SizedAxis('z', 5),
+              coordax.SizedAxis('y', 3),
+          )),
+      ),
+      dict(
+          testcase_name='insert_with_negative_index',
+          indices_to_axes={-1: coordax.SizedAxis('w', 4)},
+          coordinate=PRODUCT_XY,
+          expected=coordax.CartesianProduct((
+              coordax.SizedAxis('x', 2),
+              coordax.SizedAxis('y', 3),
+              coordax.SizedAxis('w', 4),
+          )),
+      ),
+      dict(
+          testcase_name='insert_into_scalar',
+          indices_to_axes={0: coordax.SizedAxis('x', 2)},
+          coordinate=coordax.Scalar(),
+          expected=coordax.SizedAxis('x', 2),
+      ),
+  )
+  def test_insert_axes(self, indices_to_axes, coordinate, expected):
+    actual = coordinate_systems.insert_axes(coordinate, indices_to_axes)
+    self.assertEqual(actual, expected)
+
+  def test_insert_axes_raises_out_of_range(self):
+    with self.assertRaises(ValueError):
+      coordinate_systems.insert_axes(
+          self.PRODUCT_XY, {3: coordax.SizedAxis('w', 4)}
+      )
+    with self.assertRaises(ValueError):
+      coordinate_systems.insert_axes(
+          self.PRODUCT_XY, {-4: coordax.SizedAxis('w', 4)}
+      )
+
   def test_dummy_axis(self):
     axis = coordax.DummyAxis(name='x', size=0)
     self.assertEqual(axis.dims, ('x',))

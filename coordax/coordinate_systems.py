@@ -510,6 +510,25 @@ def compose(*coordinates: Coordinate) -> Coordinate:
       return product
 
 
+@utils.export
+def insert_axes(
+    coordinate: Coordinate,
+    indices_to_axes: dict[int, Coordinate],
+) -> Coordinate:
+  """Returns `coordinate` with extra axes inserted at specified positions."""
+  indices_to_axes = indices_to_axes.copy()
+  ndim = coordinate.ndim + len(indices_to_axes)
+  normalize_idx = lambda i: i + ndim if i < 0 else i
+  indices_to_axes = {normalize_idx(i): ax for i, ax in indices_to_axes.items()}
+  if any(i < 0 or i >= ndim for i in indices_to_axes.keys()):
+    raise ValueError(f'invalid index in {indices_to_axes.keys()=}')
+
+  axes = list(coordinate.axes)
+  for index_to_insert_at, axis in sorted(indices_to_axes.items()):
+    axes.insert(index_to_insert_at, axis)
+  return compose(*axes)
+
+
 def from_xarray(
     data_array: xarray.DataArray,
     coord_types: Sequence[type[Coordinate]] = (LabeledAxis, DummyAxis),
