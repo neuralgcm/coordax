@@ -343,6 +343,16 @@ class FieldTest(parameterized.TestCase):
     ):
       field.broadcast_like(other)
 
+  def test_broadcast_to_coordinate(self):
+    x, y = coordax.SizedAxis('x', 4), coordax.SizedAxis('y', 5)
+    z = coordax.LabeledAxis('z', np.linspace(0, np.pi, 7))
+    field = coordax.wrap(np.arange(4), x)
+    yxz = coordax.compose_coordinates(y, x, z)
+    expected_data = np.tile(np.arange(4)[np.newaxis, :, np.newaxis], (5, 1, 7))
+    actual = field.broadcast_like(yxz)
+    expected = coordax.wrap(expected_data, yxz)
+    testing.assert_fields_allclose(actual=actual, desired=expected)
+
   def test_cmap_cos(self):
     """Tests that cmap works as expected."""
     inputs = (
@@ -505,6 +515,47 @@ class FieldTest(parameterized.TestCase):
 
     with self.assertRaisesWithLiteralMatch(ValueError, expected_messsage):
       coordax.Field(np.arange(4), dims=('x',), axes={'x': axis})
+
+  def test_shape_struct_field(self):
+    x, y = coordax.DummyAxis('x', 2), coordax.LabeledAxis('y', np.arange(3))
+    dummy_data = jax.ShapeDtypeStruct(x.shape + y.shape, jnp.float32)
+
+    with self.subTest('fully_labeled'):
+      f = coordax.shape_struct_field(x, y)
+      testing.assert_field_properties(
+          actual=f,
+          dims=('x', 'y'),
+          named_shape={'x': 2, 'y': 3},
+          positional_shape=(),
+          coord_field_keys=set(['y']),
+      )
+      self.assertEqual(f.data, dummy_data)
+
+    with self.subTest('partially_labeled'):
+      f = coordax.shape_struct_field(coordax.DummyAxis(None, 2), y)
+      testing.assert_field_properties(
+          actual=f,
+          dims=(None, 'y'),
+          named_shape={'y': 3},
+          positional_shape=(2,),
+          coord_field_keys=set(['y']),
+      )
+      self.assertEqual(f.data, dummy_data)
+
+  def test_shape_struct_field_as_eval_shape_arg(self):
+    x, y = coordax.DummyAxis('x', 2), coordax.LabeledAxis('y', np.arange(3))
+    f = coordax.shape_struct_field(x, y)
+
+    def fn_on_field(x: coordax.Field):
+      return coordax.cmap(jnp.stack)([x, x])
+
+    out_shape = jax.eval_shape(fn_on_field, f)
+    testing.assert_field_properties(
+        actual=out_shape,
+        dims=(None, 'x', 'y'),
+        named_shape={'x': 2, 'y': 3},
+        positional_shape=(2,),
+    )
 
   def test_duckarray(self):
 

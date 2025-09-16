@@ -495,8 +495,10 @@ class Field:
     result = Field.from_namedarray(ordered_array, self.axes)
     return result
 
-  def broadcast_like(self, other: Self) -> Self:
+  def broadcast_like(self, other: Self | Coordinate) -> Self:
     """Returns a field broadcasted like `other`."""
+    if isinstance(other, Coordinate):
+      other = shape_struct_field(other)
     for k, v in self.axes.items():
       if other.axes.get(k) != v:
         raise ValueError(
@@ -520,7 +522,9 @@ class Field:
 
     def _make_label():
       # reuse dim/shape summary from the underlying NamedArray.
-      attrs, summary, _ = named_axes_lib.attrs_summary_type(self.named_array, False)
+      attrs, summary, _ = named_axes_lib.attrs_summary_type(
+          self.named_array, False
+      )
       axes_attrs = _axes_attrs(self)
       attrs = ' '.join([attrs, f'axes={axes_attrs}'])
 
@@ -672,6 +676,17 @@ def is_field(value) -> TypeGuard[Field]:
 MissingAxes = Literal['error', 'dummy', 'skip']
 
 
+def shape_struct_field(*axes: Coordinate) -> Field:
+  """Returns a Field with `axes` and a ShapeDtypeStruct in place of data."""
+  coordinate = coordinate_systems.compose(*axes)
+
+  def _materialize_dummy_field() -> Field:
+    return wrap(jnp.zeros(coordinate.shape), coordinate)
+
+  return jax.eval_shape(_materialize_dummy_field)
+
+
+# fmt: off
 def get_coordinate(
     field: Field, *, missing_axes: MissingAxes = 'dummy'
 ) -> Coordinate:
@@ -702,7 +717,7 @@ def get_coordinate(
     elif missing_axes == 'error':
       raise ValueError(f'{field.dims=} has unnamed dims and {missing_axes=}')
   return coordinate_systems.compose(*axes)
-
+# fmt: on
 
 PyTree = Any
 

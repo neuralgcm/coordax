@@ -67,7 +67,7 @@ class NDArray(abc.ABC):
 PythonScalar = bool | int | float | complex
 NumPyScalar = np.generic
 Scalar = NumPyScalar | PythonScalar
-ArrayLike = Scalar | np.ndarray | jax.Array | NDArray
+ArrayLike = Scalar | np.ndarray | jax.Array | NDArray | jax.ShapeDtypeStruct
 Array = np.ndarray | jax.Array | NDArray
 
 
@@ -130,6 +130,18 @@ def register_ndarray(
   _TO_NUMPY_FUNCS.append((array_type, to_numpy))
   _FROM_NUMPY_FUNCS.append((is_matching_numpy_array, from_numpy))
   return array_type
+
+
+# We register ShapeDtypeStruct as a duck-typed array to allow instantiation of
+# Field objects without materializing the underlying data.
+
+
+register_ndarray(
+    jax.ShapeDtypeStruct,
+    is_matching_numpy_array=lambda x: isinstance(x, jax.ShapeDtypeStruct),
+    to_numpy=lambda x: x,  # passthrough, provides informative repr/display.
+    from_numpy=lambda x: x,  # unused, as no numpy equivalent exists.
+)
 
 
 if jax_datetime is not None:
