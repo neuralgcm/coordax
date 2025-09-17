@@ -495,8 +495,10 @@ class Field:
     result = Field.from_namedarray(ordered_array, self.axes)
     return result
 
-  def broadcast_like(self, other: Self) -> Self:
+  def broadcast_like(self, other: Self | Coordinate) -> Self:
     """Returns a field broadcasted like `other`."""
+    if isinstance(other, Coordinate):
+      other = shape_struct_field(other)
     for k, v in self.axes.items():
       if other.axes.get(k) != v:
         raise ValueError(

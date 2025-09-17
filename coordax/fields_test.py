@@ -343,6 +343,16 @@ class FieldTest(parameterized.TestCase):
     ):
       field.broadcast_like(other)
 
+  def test_broadcast_to_coordinate(self):
+    x, y = coordax.SizedAxis('x', 4), coordax.SizedAxis('y', 5)
+    z = coordax.LabeledAxis('z', np.linspace(0, np.pi, 7))
+    field = coordax.wrap(np.arange(4), x)
+    yxz = coordax.compose_coordinates(y, x, z)
+    expected_data = np.tile(np.arange(4)[np.newaxis, :, np.newaxis], (5, 1, 7))
+    actual = field.broadcast_like(yxz)
+    expected = coordax.wrap(expected_data, yxz)
+    testing.assert_fields_allclose(actual=actual, desired=expected)
+
   def test_cmap_cos(self):
     """Tests that cmap works as expected."""
     inputs = (
