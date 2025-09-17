@@ -506,6 +506,47 @@ class FieldTest(parameterized.TestCase):
     with self.assertRaisesWithLiteralMatch(ValueError, expected_messsage):
       coordax.Field(np.arange(4), dims=('x',), axes={'x': axis})
 
+  def test_shape_struct_field(self):
+    x, y = coordax.DummyAxis('x', 2), coordax.LabeledAxis('y', np.arange(3))
+    dummy_data = jax.ShapeDtypeStruct(x.shape + y.shape, jnp.float32)
+
+    with self.subTest('fully_labeled'):
+      f = coordax.shape_struct_field(x, y)
+      testing.assert_field_properties(
+          actual=f,
+          dims=('x', 'y'),
+          named_shape={'x': 2, 'y': 3},
+          positional_shape=(),
+          coord_field_keys=set(['y']),
+      )
+      self.assertEqual(f.data, dummy_data)
+
+    with self.subTest('partially_labeled'):
+      f = coordax.shape_struct_field(coordax.DummyAxis(None, 2), y)
+      testing.assert_field_properties(
+          actual=f,
+          dims=(None, 'y'),
+          named_shape={'y': 3},
+          positional_shape=(2,),
+          coord_field_keys=set(['y']),
+      )
+      self.assertEqual(f.data, dummy_data)
+
+  def test_shape_struct_field_as_eval_shape_arg(self):
+    x, y = coordax.DummyAxis('x', 2), coordax.LabeledAxis('y', np.arange(3))
+    f = coordax.shape_struct_field(x, y)
+
+    def fn_on_field(x: coordax.Field):
+      return coordax.cmap(jnp.stack)([x, x])
+
+    out_shape = jax.eval_shape(fn_on_field, f)
+    testing.assert_field_properties(
+        actual=out_shape,
+        dims=(None, 'x', 'y'),
+        named_shape={'x': 2, 'y': 3},
+        positional_shape=(2,),
+    )
+
   def test_duckarray(self):
 
     @jax.tree_util.register_dataclass

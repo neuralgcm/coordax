@@ -33,6 +33,7 @@ from coordax.fields import (
     Field as Field,
     is_field as is_field,
     tmp_axis_name as tmp_axis_name,
+    shape_struct_field as shape_struct_field,
     cmap as cmap,
     get_coordinate as get_coordinate,
     wrap_like as wrap_like,
@@ -46,4 +47,4 @@ from coordax.ndarrays import (
 )
 import coordax.testing
 
-__version__ = "0.1.3"  # keep sync with pyproject.toml
+__version__ = "0.1.4"  # keep sync with pyproject.toml
