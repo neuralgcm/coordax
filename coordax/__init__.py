@@ -36,6 +36,7 @@ from coordax.fields import (
     tmp_axis_name as tmp_axis_name,
     shape_struct_field as shape_struct_field,
     cmap as cmap,
+    cpmap as cpmap,
     get_coordinate as get_coordinate,
     wrap_like as wrap_like,
     wrap as wrap,
@@ -46,6 +47,6 @@ from coordax.ndarrays import (
     NDArray as NDArray,
     register_ndarray as register_ndarray,
 )
-import coordax.testing
+import coordax.testing  # pylint: disable=unused-import
 
-__version__ = "0.1.4"  # keep sync with pyproject.toml
+__version__ = "0.1.5"  # keep sync with pyproject.toml

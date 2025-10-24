@@ -757,22 +757,77 @@ class NamedAxesTest(parameterized.TestCase):
     ):
       named_axes.nmap(lambda x: x, out_axes={'x': 0})(array)
 
-    with self.assertRaisesRegex(
+    with self.assertRaisesWithLiteralMatch(
         ValueError,
-        re.escape(
-            'out_axes must be either all positive or all negative, but got '
-            "{'x': 0, 'y': -1}"
-        ),
+        'out_axes must be either all positive or all negative, but got '
+        "{'x': 0, 'y': -1}",
     ):
       named_axes.nmap(lambda x: x, out_axes={'x': 0, 'y': -1})(array)
 
+    with self.assertRaisesWithLiteralMatch(
+        ValueError,
+        "out_axes must all have unique values, but got {'x': 0, 'y': 0}",
+    ):
+      named_axes.nmap(lambda x: x, out_axes={'x': 0, 'y': 0})(array)
+
+    with self.assertRaisesWithLiteralMatch(
+        ValueError, "Unsupported string literal for out_axes: 'invalid'"
+    ):
+      named_axes.nmap(lambda x: x, out_axes='invalid')(array)
+
+    data_3d = np.arange(2 * 3 * 4).reshape((2, 3, 4))
+    array1 = named_axes.NamedArray(data_3d, ('x', 'y', 'z'))
+    array2 = named_axes.NamedArray(data_3d.T, ('z', 'y', 'x'))
     with self.assertRaisesRegex(
         ValueError,
         re.escape(
-            "out_axes must all have unique values, but got {'x': 0, 'y': 0}"
+            "'same_as_input' for out_axes requires all NamedArray inputs with"
+            ' named axes to have the same `named_axes`. Found multiple'
+            " distinct `named_axes`:\n[{'x': 0, 'y': 1, 'z': 2}, {'z': 0,"
+            " 'y': 1, 'x': 2}]"
         ),
     ):
-      named_axes.nmap(lambda x: x, out_axes={'x': 0, 'y': 0})(array)
+      named_axes.nmap(lambda x, y: x, out_axes='same_as_input')(array1, array2)
+
+    array1 = named_axes.NamedArray(np.zeros(2), ('x',))
+    array2 = named_axes.NamedArray(np.zeros((2, 3)), ('x', 'y'))
+    with self.assertRaisesWithLiteralMatch(
+        ValueError,
+        "'same_as_input' for out_axes requires all NamedArray inputs with"
+        ' named axes to have the same `named_axes`. Found multiple'
+        " distinct `named_axes`:\n[{'x': 0}, {'x': 0, 'y': 1}]"
+    ):
+      named_axes.nmap(lambda x, y: x, out_axes='same_as_input')(array1, array2)
+
+  def test_nmap_out_axes_options(self):
+    data = np.arange(2 * 3 * 4).reshape((2, 3, 4))
+    array = named_axes.NamedArray(data, ('x', None, 'z'))
+
+    with self.subTest('leading'):
+      expected = named_axes.NamedArray(
+          data.transpose(0, 2, 1), ('x', 'z', None)
+      )
+      actual = named_axes.nmap(lambda x: x, out_axes='leading')(array)
+      assert_named_array_equal(actual, expected)
+
+    with self.subTest('trailing'):
+      expected = named_axes.NamedArray(
+          data.transpose(1, 0, 2), (None, 'x', 'z')
+      )
+      actual = named_axes.nmap(lambda x: x, out_axes='trailing')(array)
+      assert_named_array_equal(actual, expected)
+
+    with self.subTest('same_as_input'):
+      expected = array
+      actual = named_axes.nmap(lambda x: x, out_axes='same_as_input')(array)
+      assert_named_array_equal(actual, expected)
+
+      # with two inputs
+      actual = named_axes.nmap(
+          lambda x, y: x + y, out_axes='same_as_input'
+      )(array, array)
+      expected = named_axes.NamedArray(array.data * 2, array.dims)
+      assert_named_array_equal(actual, expected)
 
   def test_vectorized_methods(self):
     data = np.arange(2 * 3 * 4).reshape((2, 3, 4))

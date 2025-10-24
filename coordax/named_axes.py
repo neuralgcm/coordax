@@ -28,7 +28,7 @@ import functools
 import operator
 import textwrap
 import types
-from typing import Any, Callable, Self, TypeGuard, TypeVar
+from typing import Any, Callable, Literal, Self, TypeAlias, TypeGuard, TypeVar
 
 from coordax import ndarrays
 import jax
@@ -172,6 +172,11 @@ class NamedArrayAdapter(ndarray_adapters.NDArrayAdapter['NamedArray']):
     )
 
 
+OutAxes: TypeAlias = (
+    dict[str, int] | Literal['leading', 'trailing', 'same_as_input']
+)
+
+
 def _collect_named_shape(
     leaves_and_paths: list[tuple[jax.tree_util.KeyPath, Any]],
     source_description: str,
@@ -210,32 +215,59 @@ def _collect_named_shape(
 
 
 def _normalize_out_axes(
-    out_axes: dict[str, int] | None, named_shape: dict[str, int]
+    out_axes: OutAxes,
+    named_shape: dict[str, int],
+    named_arrays: list[NamedArray],
 ) -> dict[str, int]:
   """Normalize the out_axes argument to nmap."""
-  if out_axes is None:
-    return {dim: -(i + 1) for i, dim in enumerate(reversed(named_shape.keys()))}
-
-  if out_axes.keys() != named_shape.keys():
-    raise ValueError(
-        f'out_axes keys {list(out_axes)} must match the named '
-        f'dimensions {list(named_shape)}'
-    )
-  any_negative = any(axis < 0 for axis in out_axes.values())
-  any_non_negative = any(axis >= 0 for axis in out_axes.values())
-  if any_negative and any_non_negative:
-    # TODO(shoyer) consider supporting mixed positive and negative out_axes.
-    # This would require using jax.eval_shape() to determine the
-    # dimensionality of all output arrays.
-    raise ValueError(
-        'out_axes must be either all positive or all negative, but got '
-        f'{out_axes}'
-    )
-  if len(set(out_axes.values())) != len(out_axes):
-    raise ValueError(
-        f'out_axes must all have unique values, but got {out_axes}'
-    )
-  return out_axes
+  match out_axes:
+    case 'trailing':
+      return {
+          dim: -(i + 1)
+          for i, dim in enumerate(reversed(list(named_shape.keys())))
+      }
+    case 'leading':
+      return {dim: i for i, dim in enumerate(named_shape.keys())}
+    case 'same_as_input':
+      named_arrays_with_axes = [arr for arr in named_arrays if arr.named_axes]
+      if not named_arrays_with_axes:
+        return {}
+      unique_named_axes = {
+          tuple(sorted(arr.named_axes.items()))
+          for arr in named_arrays_with_axes
+      }
+      if len(unique_named_axes) > 1:
+        named_axes_list = [arr.named_axes for arr in named_arrays_with_axes]
+        raise ValueError(
+            "'same_as_input' for out_axes requires all NamedArray inputs with"
+            ' named axes to have the same `named_axes`. Found multiple'
+            f' distinct `named_axes`:\n{named_axes_list}'
+        )
+      [unique_named_axes] = unique_named_axes
+      return dict(unique_named_axes)
+    case str():
+      raise ValueError(f'Unsupported string literal for out_axes: {out_axes!r}')
+    case _:
+      if out_axes.keys() != named_shape.keys():
+        raise ValueError(
+            f'out_axes keys {list(out_axes)} must match the named '
+            f'dimensions {list(named_shape)}'
+        )
+      any_negative = any(axis < 0 for axis in out_axes.values())
+      any_non_negative = any(axis >= 0 for axis in out_axes.values())
+      if any_negative and any_non_negative:
+        # TODO(shoyer) consider supporting mixed positive and negative out_axes.
+        # This would require using jax.eval_shape() to determine the
+        # dimensionality of all output arrays.
+        raise ValueError(
+            'out_axes must be either all positive or all negative, but got '
+            f'{out_axes}'
+        )
+      if len(set(out_axes.values())) != len(out_axes):
+        raise ValueError(
+            f'out_axes must all have unique values, but got {out_axes}'
+        )
+      return out_axes
 
 
 def _nest_vmap_axis(inner_axis: int, outer_axis: int) -> int:
@@ -255,9 +287,17 @@ def _nest_vmap_axis(inner_axis: int, outer_axis: int) -> int:
       return inner_axis + 1
 
 
+OutAxes: TypeAlias = (
+    dict[str, int] | Literal['leading', 'trailing', 'same_as_input']
+)
+
+
+# fmt: off
 def nmap(
     fun: Callable,  # pylint: disable=g-bare-generic
-    out_axes: dict[str, int] | None = None,
+    out_axes: (
+        dict[str, int] | Literal['leading', 'trailing', 'same_as_input']
+    ) = 'trailing',
     *,
     vmap: Callable = jax.vmap,  # pylint: disable=g-bare-generic
 ) -> Callable:  # pylint: disable=g-bare-generic
@@ -290,9 +330,17 @@ def nmap(
     fun: Function to vectorize by name. This can take arbitrary arguments (even
       non-JAX-arraylike arguments or "static" axis sizes), but must produce a
       PyTree of JAX ArrayLike outputs.
-    out_axes: Optional dictionary from dimension names to axis positions in the
-      output. By default, dimension names appear as the trailing dimensions of
-      every output, in order of their appearance on the inputs.
+    out_axes: Specifies strategy for choosing axis positions in the outputs.
+      Options include:
+      - dict[str, int]: mapping from dimension name to axis position. Keys must
+        include all named dimensions present in the inputs. Axis positions be
+        unique and either all positive or all negative.
+      - 'leading': dimension names will appear as the leading axes on every
+        output, in order of their appearance on the inputs.
+      - 'trailing': dimension names will appear as the trailing axes on every
+        output, in order of their appearance on the inputs.
+      - 'same_as_input': dimension names will appear in the same order as in the
+        inputs, where the inputs must all have the same named axes.
     vmap: Vectorizing transformation to use when mapping over named axes.
       Defaults to jax.vmap. A different implementation can be used to make
       coordax compatible with custom objects (e.g. neural net modules).
@@ -315,13 +363,16 @@ def nmap(
   else:
     fun_doc = None
   return _nmap_with_doc(fun, fun_name, fun_doc, out_axes, vmap=vmap)
+# fmt: on
 
 
 def _nmap_with_doc(
     fun: Callable,  # pylint: disable=g-bare-generic
     fun_name: str,
     fun_doc: str | None = None,
-    out_axes: dict[str, int] | None = None,
+    out_axes: (
+        dict[str, int] | Literal['leading', 'trailing', 'same_as_input']
+    ) = 'trailing',
     *,
     vmap: Callable = jax.vmap,  # pylint: disable=g-bare-generic
 ) -> Callable:  # pylint: disable=g-bare-generic
@@ -334,12 +385,13 @@ def _nmap_with_doc(
         is_leaf=lambda node: isinstance(node, NamedArray),
     )
     leaves = [leaf for _, leaf in leaves_and_paths]
+    named_arrays = [leaf for leaf in leaves if isinstance(leaf, NamedArray)]
 
     named_shape = _collect_named_shape(
         leaves_and_paths, source_description=f'nmap({fun})'
     )
     all_dims = tuple(named_shape.keys())
-    out_axes_dict = _normalize_out_axes(out_axes, named_shape)
+    out_axes_dict = _normalize_out_axes(out_axes, named_shape, named_arrays)
 
     nested_in_axes = {}
     nested_out_axes = {}

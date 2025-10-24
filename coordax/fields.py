@@ -79,10 +79,13 @@ def tmp_axis_name(field: Field, excluded_names: set[str] | None = None) -> str:
   assert False  # unreachable
 
 
+# fmt: off
 @utils.export
 def cmap(
     fun: Callable[..., Any],
-    out_axes: dict[str, int] | None = None,
+    out_axes: (
+        dict[str, int] | Literal['leading', 'trailing', 'same_as_input']
+    ) = 'trailing',
     *,
     vmap: Callable = jax.vmap,  # pylint: disable=g-bare-generic
 ) -> Callable[..., Any]:
@@ -90,9 +93,18 @@ def cmap(
 
   Args:
     fun: Function to vectorize over coordinate dimensions.
-    out_axes: Optional dictionary from dimension names to axis positions in the
-      output. By default, dimension names appear as the trailing dimensions of
-      every output, in order of their appearance on the inputs.
+    out_axes: Specifies strategy for choosing axis positions in the outputs.
+      Options include:
+      - dict[str, int]: mapping from dimension name to axis position. Keys must
+        include all named dimensions present in the inputs. Axis positions must
+        be unique and either all positive or all negative.
+      - 'leading': dimension names will appear as the leading axes on every
+        output, in order of their appearance on the inputs.
+      - 'trailing': dimension names will appear as the trailing axes on every
+        output, in order of their appearance on the inputs.
+      - 'same_as_input': dimension names will appear in the same order as in the
+        inputs, where the inputs must all have the same named axes and the same
+        number of dimensions as the outputs.
     vmap: Vectorizing transformation to use when mapping over named axes.
       Defaults to jax.vmap. A different implementation can be used to make
       coordax compatible with custom objects (e.g. neural net modules).
@@ -102,7 +114,24 @@ def cmap(
     positional dimensions in inputs, while vectorizing over all coordinate
     dimensions. All dimensions over which `fun` is vectorized will be present in
     every output.
+
+  Examples:
+    >>> import coordax as cx
+    >>> import jax.numpy as jnp
+    >>> field = cx.wrap(jnp.ones((2, 3, 1)), 'x', None, 'y')
+    >>> cx.cmap(jnp.sin)(field).dims  # named axes are trailing by default.
+    (None, 'x', 'y')
+    >>> cx.cmap(jnp.sin, out_axes='leading')(field).dims
+    ('x', 'y', None)
+    >>> cx.cmap(jnp.sin, out_axes='same_as_input')(field).dims
+    ('x', None, 'y')
+    >>> # Multiple arguments result in all axes in order they appear in inputs.
+    >>> a = cx.wrap(jnp.ones((2, 3)), 'x', 'y')
+    >>> b = cx.wrap(jnp.ones((3, 4)), 'y', 'z')
+    >>> cx.cmap(jnp.add)(a, b).dims
+    ('x', 'y', 'z')
   """
+  # fmt: on
   if hasattr(fun, '__name__'):
     fun_name = fun.__name__
   else:
@@ -114,11 +143,51 @@ def cmap(
   return _cmap_with_doc(fun, fun_name, fun_doc, out_axes, vmap=vmap)
 
 
+@utils.export
+def cpmap(
+    fun: Callable[..., Any],
+    *,
+    vmap: Callable = jax.vmap,  # pylint: disable=g-bare-generic
+) -> Callable[..., Any]:
+  """Coordinate preserving cmap, alias for cmap(fun, out_axes='same_as_input').
+
+  Primary use case is applying a function over positional axes while preserving
+  the dimensionality and the coordinate order.
+
+  Args:
+    fun: Function to apply over positional axes of the inputs.
+    vmap: Vectorizing transformation to use when mapping over named axes.
+      Defaults to jax.vmap. A different implementation can be used to make
+      coordax compatible with custom objects (e.g. neural net modules).
+
+  Returns:
+    A function that applies `fun` to positional axes of the inputs while
+    vectorizing over all coordinate dimensions. The coordinate order of the
+    inputs is preserved in the outputs.
+
+  Examples:
+    >>> import coordax as cx
+    >>> import jax.numpy as jnp
+    >>> field = cx.wrap(jnp.ones((2, 3, 4)), 'x', None, 'y')
+    >>> cx.cpmap(lambda x: x**2)(field).dims
+    ('x', None, 'y')
+
+    >>> # `cpmap` requires all inputs to have the same named axes ordering.
+    >>> # The following will raise a ValueError:
+    >>> a = cx.wrap(jnp.ones((2, 3)), 'x', 'y')
+    >>> b = cx.wrap(jnp.ones((3, 2)), 'y', 'x')
+    >>> # cx.cpmap(jnp.add)(a, b)  # Raises ValueError
+  """
+  return cmap(fun, out_axes='same_as_input', vmap=vmap)
+
+
 def _cmap_with_doc(
     fun: Callable[..., Any],
     fun_name: str,
     fun_doc: str | None = None,
-    out_axes: dict[str, int] | None = None,
+    out_axes: (
+        dict[str, int] | Literal['leading', 'trailing', 'same_as_input']
+    ) = 'trailing',
     *,
     vmap: Callable = jax.vmap,  # pylint: disable=g-bare-generic
 ) -> Callable[..., Any]:
