@@ -529,6 +529,46 @@ def insert_axes(
   return compose(*axes)
 
 
+@utils.export
+def replace_axes(
+    coordinate: Coordinate,
+    to_replace: Coordinate,
+    replace_with: Coordinate,
+) -> Coordinate:
+  """Returns `coordinate` with `to_replace` replaced by `replace_with`.
+
+  Args:
+    coordinate: The coordinate system to modify.
+    to_replace: A contiguous part of the coordinate system to be replaced.
+    replace_with: The new coordinate to insert.
+
+  Returns:
+    A new coordinate object with `to_replace` substituted by `replace_with`.
+
+  Raises:
+    ValueError: If `to_replace` is not a contiguous part of `coordinate`.
+  """
+  if not to_replace.dims:
+    raise ValueError(f'`to_replace` must have dimensions, got {to_replace}')
+
+  # find where the sub-tuple `to_replace.axes` starts in `coordinate.axes`.
+  start_index = -1
+  for i in range(len(coordinate.axes) - len(to_replace.axes) + 1):
+    if coordinate.axes[i : i + len(to_replace.axes)] == to_replace.axes:
+      start_index = i
+      break
+
+  if start_index == -1:
+    raise ValueError(
+        f'coordinate {coordinate=} does not contiguously contain {to_replace=}'
+    )
+
+  end_index = start_index + len(to_replace.axes)
+  axes = list(coordinate.axes)
+  axes[start_index:end_index] = replace_with.axes
+  return compose(*axes)
+
+
 def from_xarray(
     data_array: xarray.DataArray,
     coord_types: Sequence[type[Coordinate]] = (LabeledAxis, DummyAxis),

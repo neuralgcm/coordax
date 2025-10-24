@@ -326,6 +326,111 @@ class CoordinateSystemsTest(parameterized.TestCase):
           self.PRODUCT_XY, {-4: coordax.SizedAxis('w', 4)}
       )
 
+  @parameterized.named_parameters(
+      dict(
+          testcase_name='replace_at_start',
+          to_replace=coordax.SizedAxis('x', 2),
+          replace_with=coordax.SizedAxis('w', 4),
+          coordinate=PRODUCT_XY,
+          expected=coordax.CartesianProduct(
+              (coordax.SizedAxis('w', 4), coordax.SizedAxis('y', 3))
+          ),
+      ),
+      dict(
+          testcase_name='replace_at_end',
+          to_replace=coordax.SizedAxis('y', 3),
+          replace_with=coordax.SizedAxis('w', 4),
+          coordinate=PRODUCT_XY,
+          expected=coordax.CartesianProduct(
+              (coordax.SizedAxis('x', 2), coordax.SizedAxis('w', 4))
+          ),
+      ),
+      dict(
+          testcase_name='replace_in_middle',
+          to_replace=coordax.SizedAxis('y', 3),
+          replace_with=coordax.SizedAxis('w', 4),
+          coordinate=coordax.compose_coordinates(
+              coordax.SizedAxis('x', 2),
+              coordax.SizedAxis('y', 3),
+              coordax.SizedAxis('z', 5),
+          ),
+          expected=coordax.compose_coordinates(
+              coordax.SizedAxis('x', 2),
+              coordax.SizedAxis('w', 4),
+              coordax.SizedAxis('z', 5),
+          ),
+      ),
+      dict(
+          testcase_name='replace_multiple_with_single',
+          to_replace=PRODUCT_XY,
+          replace_with=coordax.SizedAxis('w', 4),
+          coordinate=coordax.compose_coordinates(
+              PRODUCT_XY, coordax.SizedAxis('z', 5)
+          ),
+          expected=coordax.compose_coordinates(
+              coordax.SizedAxis('w', 4), coordax.SizedAxis('z', 5)
+          ),
+      ),
+      dict(
+          testcase_name='replace_single_with_multiple',
+          to_replace=coordax.SizedAxis('y', 3),
+          replace_with=coordax.compose_coordinates(
+              coordax.SizedAxis('w', 4), coordax.SizedAxis('z', 5)
+          ),
+          coordinate=PRODUCT_XY,
+          expected=coordax.compose_coordinates(
+              coordax.SizedAxis('x', 2),
+              coordax.SizedAxis('w', 4),
+              coordax.SizedAxis('z', 5),
+          ),
+      ),
+      dict(
+          testcase_name='replace_all',
+          to_replace=PRODUCT_XY,
+          replace_with=coordax.SizedAxis('w', 4),
+          coordinate=PRODUCT_XY,
+          expected=coordax.SizedAxis('w', 4),
+      ),
+  )
+  def test_replace_axes(self, to_replace, replace_with, coordinate, expected):
+    actual = coordinate_systems.replace_axes(
+        coordinate, to_replace, replace_with
+    )
+    self.assertEqual(actual, expected)
+
+  def test_replace_axes_raises_when_to_replace_not_found(self):
+    to_replace = coordax.SizedAxis('z', 4)
+    with self.assertRaisesRegex(ValueError, 'does not contiguously contain'):
+      coordinate_systems.replace_axes(
+          self.PRODUCT_XY,
+          to_replace,
+          coordax.SizedAxis('w', 5),
+      )
+
+  def test_replace_axes_raises_when_to_replace_not_contiguous(self):
+    coordinate = coordax.compose_coordinates(
+        coordax.SizedAxis('x', 2),
+        coordax.SizedAxis('z', 4),
+        coordax.SizedAxis('y', 3),
+    )
+    to_replace = self.PRODUCT_XY  # contains x and y
+    with self.assertRaisesRegex(ValueError, 'does not contiguously contain'):
+      coordinate_systems.replace_axes(
+          coordinate, to_replace, coordax.SizedAxis('w', 5)
+      )
+
+  def test_replace_axes_raises_when_to_replace_is_empty(self):
+    to_replace = coordax.Scalar()
+    with self.assertRaisesWithLiteralMatch(
+        ValueError,
+        f'`to_replace` must have dimensions, got {to_replace!r}',
+    ):
+      coordinate_systems.replace_axes(
+          self.PRODUCT_XY,
+          to_replace,
+          coordax.SizedAxis('w', 4),
+      )
+
   def test_dummy_axis(self):
     axis = coordax.DummyAxis(name='x', size=0)
     self.assertEqual(axis.dims, ('x',))

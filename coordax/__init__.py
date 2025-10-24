@@ -27,6 +27,7 @@ from coordax.coordinate_systems import (
     canonicalize as canonicalize_coordinates,
     compose as compose_coordinates,
     insert_axes as insert_axes_to_coordinate,
+    replace_axes as replace_axes_in_coordinate,
     from_xarray as coordinates_from_xarray,
 )
 from coordax.fields import (
