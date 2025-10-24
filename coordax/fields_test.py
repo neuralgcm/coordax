@@ -387,6 +387,42 @@ class FieldTest(parameterized.TestCase):
         coord_field_keys=set(['y']),
     )
 
+  def test_cmap_out_axes_options(self):
+    data = np.arange(2 * 3 * 4).reshape((2, 3, 4))
+    x_axis = coordax.LabeledAxis('x', np.arange(2))
+    z_axis = coordax.LabeledAxis('z', np.arange(4))
+    field = coordax.wrap(data, x_axis, None, z_axis)
+
+    with self.subTest('leading'):
+      expected = coordax.wrap(data.transpose(0, 2, 1), x_axis, z_axis, None)
+      actual = coordax.cmap(lambda x: x, out_axes='leading')(field)
+      testing.assert_fields_allclose(actual, expected)
+
+    with self.subTest('trailing'):
+      expected = coordax.wrap(data.transpose(1, 0, 2), None, x_axis, z_axis)
+      actual = coordax.cmap(lambda x: x, out_axes='trailing')(field)
+      testing.assert_fields_allclose(actual, expected)
+
+    with self.subTest('same_as_input'):
+      expected = field
+      actual = coordax.cmap(lambda x: x, out_axes='same_as_input')(field)
+      testing.assert_fields_allclose(actual, expected)
+
+  def test_cpmap_example(self):
+    data = np.arange(2 * 3 * 4).reshape((2, 3, 4))
+    x_axis = coordax.LabeledAxis('x', np.arange(2))
+    y_axis = coordax.LabeledAxis('y', np.arange(4))
+    field = coordax.wrap(data, x_axis, None, y_axis)
+
+    def normalize_fn(array_slice):
+      return array_slice / jnp.linalg.norm(array_slice)
+
+    actual = coordax.cpmap(normalize_fn)(field)
+
+    expected_data = data / jnp.linalg.norm(data, axis=1)[:, np.newaxis, :]
+    expected = coordax.wrap(expected_data, x_axis, None, y_axis)
+    testing.assert_fields_allclose(actual, expected)
+
   def test_jit(self):
     trace_count = 0
 
