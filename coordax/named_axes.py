@@ -704,8 +704,7 @@ class NamedArray:
     [data] = leaves
 
     if not all(
-        # isinstance(x, jax.typing.ArrayLike)
-        isinstance(x, Array)
+        isinstance(x, ArrayLike)
         for x in jax.tree.leaves(data, is_leaf=lambda y: y is None)
     ):
       # JAX builds pytrees with non-ndarray leaves inside some transformations,
