@@ -74,14 +74,13 @@ intersphinx_mapping = {
 # a list of builtin themes.
 #
 html_theme = 'furo'  # https://pradyunsg.me/furo/quickstart/
-# html_logo = "coordax-logo.png"
 html_theme_options = {
     'source_repository': 'https://github.com/neuralgcm/coordax/',
     'source_branch': 'main',
     'source_directory': 'docs/',
-    'sidebar_hide_name': False,
-    # 'light_logo': 'coordax-logo-light.png',
-    # 'dark_logo': 'coordax-logo-dark.png',
+    'sidebar_hide_name': True,
+    'light_logo': 'coordax_logo_light.png',
+    'dark_logo': 'coordax_logo_dark.png',
 }
 
 # Add any paths that contain custom static files (such as style sheets) here,

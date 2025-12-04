@@ -36,7 +36,7 @@ Instead of expecting every routine to be wrapped, we provide
 [simple transformations](cmap.ipynb) for converting functions written for unlabeled
 arrays to labeled arrays.
 
-## Optional coordinate objects 
+## Optional coordinate objects
 
 There is an inherent tension between the appealing simplicity of string-based dimension
 names and the need to keep track of detailed information about coordinate systems.

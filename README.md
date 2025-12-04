@@ -1,4 +1,6 @@
-# Coordax: Coordinate axes for scientific computing in JAX
+![](https://github.com/neuralgcm/coordax/raw/main/docs/_static/neuralgcm_logo_light.png)
+
+# Coordax: Coordinate Axes for JAX
 
 Authors: Dmitrii Kochkov and Stephan Hoyer
 
