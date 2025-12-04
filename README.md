@@ -2,41 +2,30 @@
 
 Authors: Dmitrii Kochkov and Stephan Hoyer
 
-Coordax makes it easy to associate array dimensions with coordinates in the
-context of scientific simulation codes written in JAX. This allows for efficient
-and expressive manipulation of data defined on structured grids, enabling
-operations like differentiation and interpolation with respect to physical
-coordinates.
+Coordax is a Python library for labeled axes with [JAX](https://github.com/jax-ml/jax/).
+Our approach is reminiscent of [Xarray](https://github.com/pydata/xarray),
+but tailored to meet the needs of simulation codes in scientific computing.
 
-Coordax was designed to meet the needs of
+Compared to other libraries for labeled arrays, Coordax provides a handful of key
+features:
+
+1. First class integration with JAX, including support for arbitrary JAX transformations
+   that introduce or remove dimensions (e.g., `vmap` and `scan`).
+2. Easy wrapping of code not written for labeled arrays with `cmap`
+   (inspired by [Penzai](https://penzai.readthedocs.io/en/stable/notebooks/named_axes.html))
+3. Optional `Coordinate` objects that are propgated through computations
+   (e.g., to keep track of discretization details).
+4. Lossless conversion to and from [Xarray](https://github.com/pydata/xarray)
+   data structures (e.g., for serialization and data analysis).
+
+Coordax was developed to meet the needs of
 [NeuralGCM](https://github.com/neuralgcm/neuralgcm), but we hope it will be
 useful more broadly!
 
-## Key features
+For more details, **[read the documentation](https://coordax.readthedocs.io/)**.
 
-1. Compute on locally-positional axes via coordinate map (`cmap`)
-2. Coordinate objects that carry discretization details and custom methods
-3. Lossless conversion to and from [Xarray](https://github.com/pydata/xarray)
-   data structures (e.g., for serialization)
+## Disclaimer
 
-Coordax is particularly well-suited for scientific simulations where it is
-crucial to propagate discretization details and associated objects throughout
-the computation, such as Earth system modeling of fluid dynamics. The approach
-to labeled dimensions was originally forked from Daniel Johnson's
-[Penzai](https://penzai.readthedocs.io/en/stable/notebooks/named_axes.html),
-which may be a better fit for simpler use-cases.
-
-## Why not use Xarray?
-
-Xarray does indeed support putting JAX arrays into Xarray data structures, an
-approach used by the
-[GraphCast codebase](https://github.com/google-deepmind/graphcast/blob/v0.1.1/graphcast/xarray_jax.py).
-This works reasonably well, but wrapping JAX in Xarray will always be at least a
-little bit awkward, because Xarray was designed for the needs of data analysis
-rather than modeling, and cannot build core functionality on top of JAX power
-features such as `vmap`. For JAX-native simulations, we believe Coordax is a
-better choice.
-
-## Documentation and examples
-
-Coming soon!
+Coordax is an experiment that we are sharing with the outside world in the    hope
+that it will be useful. It is not a supported Google product. We welcome feedback,
+bug reports and code contributions, but cannot guarantee they will be addressed.

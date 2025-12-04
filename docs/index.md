@@ -1,34 +1,38 @@
-# Coordax documentation
+# Coordax: Coordinate axes for scientific computing in JAX
 
-## Overview
+Coordax is a Python library for labeled axes with [JAX](https://github.com/jax-ml/jax/).
+Our approach is reminiscent of [Xarray](https://github.com/pydata/xarray),
+but tailored to meet the needs of simulation codes in scientific computing.
 
-Coordax makes it easy to associate array dimensions with coordinates in the
-context of scientific simulation codes written in JAX. This allows for
-efficient and expressive manipulation of data defined on structured grids,
-enabling operations like differentiation and interpolation with respect to
-physical coordinates.
+Compared to other libraries for labeled arrays, Coordax provides a handful of key
+features:
 
-Coordax was designed to meet the needs of
-[NeuralGCM](https://github.com/neuralgcm/neuralgcm), but we hope it will be
-useful more broadly!
+1. First class integration with JAX, including support for arbitrary JAX transformations
+   that introduce or remove dimensions (e.g., `vmap` and `scan`).
+2. Easy wrapping of code not written for labeled arrays with `cmap`
+   (originally forked from Daniel Johnson's [Penzai](https://penzai.readthedocs.io/en/stable/notebooks/named_axes.html))
+3. Support for propagating arbitrary `Coordinate` objects through computations
+   (e.g., to keep track of discretization details).
+4. Lossless conversion to and from [Xarray](https://github.com/pydata/xarray)
+   data structures (e.g., for serialization and data analysis).
 
-## Key features
-
-1. Compute on locally-positional axes via coordinate map (`cmap`)
-2. Coordinate objects that carry discretization details and custom methods
-3. Lossless conversion to and from [Xarray](https://github.com/pydata/xarray)
-   data structures (e.g., for serialization)
-
-## Questions?
-
-The best place to ask for help or report bugs is
-[on GitHub](https://github.com/neuralgcm/coordax/issues).
+Read on for more details!
 
 ## Contents
 
 ```{toctree}
 :maxdepth: 1
+why_coordax.md
 installation.md
-quickstart.ipynb
+fields.ipynb
+cmap.ipynb
+jax_transformations.ipynb
+coordinates.ipynb
+xarray.ipynb
 api.md
 ```
+
+## Questions?
+
+The best place to ask for help or report bugs is
+[on GitHub](https://github.com/neuralgcm/coordax/issues).
