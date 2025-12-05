@@ -17,9 +17,10 @@ from absl.testing import absltest
 import coordax as cx
 from coordax import testing
 import jax.numpy as jnp
-import jax_datetime as jdt
 import numpy as np
-import xarray
+import pytest
+
+jdt = pytest.importorskip("jax_datetime")
 
 
 class IntegrationTest(absltest.TestCase):
@@ -45,6 +46,7 @@ class IntegrationTest(absltest.TestCase):
     testing.assert_fields_equal(actual, expected)
 
   def test_to_and_from_xarray(self):
+    xarray = pytest.importorskip("xarray")
     field = cx.Field(
         jdt.to_timedelta(np.array([1, 2]), unit='D'), dims=('time',)
     )

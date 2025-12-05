@@ -29,13 +29,12 @@ from typing import Any, Self, TYPE_CHECKING, TypeAlias, TypeVar
 from coordax import utils
 import jax
 import numpy as np
-# TODO(shoyer): consider making Xarray an optional dependency of core Coordax
-import xarray
 
 if TYPE_CHECKING:
   # import only under TYPE_CHECKING to avoid circular dependency
   # pylint: disable=g-bad-import-order
   from coordax import fields
+  import xarray
 
 
 Pytree: TypeAlias = Any
@@ -112,6 +111,8 @@ class Coordinate(abc.ABC):
 
   def to_xarray(self) -> dict[str, xarray.Variable]:
     """Convert this coordinate into xarray variables."""
+    import xarray
+
     variables = {}
     dims_set = {dim for dim in self.dims if dim is not None}
     for name, coord_field in self.fields.items():
