@@ -704,7 +704,6 @@ class NamedArray:
     [data] = leaves
 
     if not all(
-        # isinstance(x, jax.typing.ArrayLike)
         isinstance(x, Array)
         for x in jax.tree.leaves(data, is_leaf=lambda y: y is None)
     ):
