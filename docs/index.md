@@ -33,5 +33,5 @@ api.md
 
 ## Questions?
 
-The best place to ask for help or report bugs is
-[on GitHub](https://github.com/neuralgcm/coordax/issues).
+The best place to ask for help or report bugs is in the issue tracker
+[on GitHub](https://github.com/neuralgcm/coordax/).
