@@ -7,7 +7,7 @@ packages = ["coordax"]
 
 [project]
 name = "coordax"
-version = "0.1.5"  # keep sync with __init__.py
+version = "0.1.6"  # keep sync with __init__.py
 description = "Coordinate axes for scientific computing in JAX"
 authors = [
     {name = "Google LLC", email = "noreply@google.com"},
@@ -16,11 +16,9 @@ readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.11"
 dependencies = [
-    "chex",
     "jax",
     "numpy",
     "treescope",
-    "xarray",
 ]
 
 [project.urls]
@@ -28,9 +26,12 @@ source = "https://github.com/neuralgcm/coordax"
 
 [project.optional-dependencies]
 complete = [
+    "chex",
     "jax-datetime",
+    "xarray",
 ]
 tests = [
     "absl-py",
     "pytest",
+    "chex",
 ]

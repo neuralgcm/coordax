@@ -19,6 +19,7 @@ import coordax
 from coordax import testing
 import jax
 import numpy as np
+import pytest
 import xarray
 
 
@@ -61,6 +62,10 @@ AdhocCoordinate.__module__ = 'adhoc'
 
 
 class XarrayTest(absltest.TestCase):
+
+  def setUp(self):
+    super().setUp()
+    pytest.importorskip("xarray")
 
   def test_field_to_data_array_without_axes(self):
     data = np.arange(2 * 3).reshape((2, 3))
