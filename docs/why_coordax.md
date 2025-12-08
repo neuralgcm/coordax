@@ -82,7 +82,7 @@ label-propagating operations in
 [penzai.named_axes](https://penzai.readthedocs.io/en/stable/notebooks/named_axes.html) with `tag`/`untag`/`nmap`, so much so that we
 forked it as the basis of Coordax's `tag`/`untag`/`cmap` (thanks Daniel!).
 We didn't love that Penzai uses two different labeled array types (`NamedArray`
-and `NamedArrayView`), with different data models and a layer of indirection for
+and `NamedArrayView`), with different data models and indirection for
 axis names with `data_axis_for_logical_axis` and `data_axis_for_name`. This
 adds a layer of friction when using transformations not designed for labeled
 arrays, because users need to know what type of named arrays they have. Penzai

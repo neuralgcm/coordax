@@ -11,27 +11,34 @@ on:
 
 jobs:
   pytest-job:
-    name: "python ${{ matrix.python-version }}"
+    name: "python ${{ matrix.python-version }} (${{ matrix.variant }})"
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12", "3.13"]
+        python-version: ["3.11", "3.14"]
+        variant: ["all dependencies", "min dependencies"]
+        include:
+          - variant: "all dependencies"
+            extras: "complete,tests"
+          - variant: "min dependencies"
+            extras: "tests"
     steps:
     - name: Cancel previous
       uses: styfle/cancel-workflow-action@0.7.0
       with:
         access_token: ${{ github.token }}
-      if: ${{github.ref != 'refs/head/main'}}
+      if: ${{ github.ref != 'refs/head/main' }}
     - uses: actions/checkout@v4
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
         cache: 'pip'
-    - name: Install Coordax
+    - name: Install Coordax (${{ matrix.variant }})
+      # 3. Use the mapped 'extras' variable here
       run: |
-        pip install -e .[complete,tests]
+        pip install -e .[${{ matrix.extras }}]
     - name: Run unit tests
       run: |
         pytest -v coordax

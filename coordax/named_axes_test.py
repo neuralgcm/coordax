@@ -23,8 +23,8 @@ from coordax import named_axes
 from coordax import ndarrays
 import jax
 import jax.numpy as jnp
-import jax_datetime as jdt
 import numpy as np
+import pytest
 import treescope
 
 
@@ -93,6 +93,8 @@ class NamedAxesTest(parameterized.TestCase):
       self.assertIsInstance(array.data, jnp.ndarray)
 
   def test_constructor_datetime(self):
+    jdt = pytest.importorskip('jax_datetime')
+
     dt = jdt.to_timedelta(1, 'day')
 
     array = named_axes.NamedArray(dt, ())

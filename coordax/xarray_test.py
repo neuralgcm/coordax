@@ -19,7 +19,9 @@ import coordax
 from coordax import testing
 import jax
 import numpy as np
-import xarray
+import pytest
+
+xarray = pytest.importorskip('xarray')
 
 
 # TODO(shoyer): consider moving this into coordax's public API
@@ -61,6 +63,10 @@ AdhocCoordinate.__module__ = 'adhoc'
 
 
 class XarrayTest(absltest.TestCase):
+
+  def setUp(self):
+    super().setUp()
+    pytest.importorskip('xarray')
 
   def test_field_to_data_array_without_axes(self):
     data = np.arange(2 * 3).reshape((2, 3))
@@ -179,8 +185,7 @@ class XarrayTest(absltest.TestCase):
 
     with self.assertRaisesWithLiteralMatch(
         ValueError,
-        textwrap.dedent(
-            """\
+        textwrap.dedent("""\
             failed to convert xarray.DataArray to coordax.Field, because no coordinate type matched the dimensions starting with ('x', 'y'):
             <xarray.DataArray (x: 2, y: 3)> Size: 48B
             array([[0, 1, 2],
@@ -190,8 +195,7 @@ class XarrayTest(absltest.TestCase):
             Dimensions without coordinates: x
 
             Reasons why coordinate matching failed:
-            coordax.LabeledAxis: no associated coordinate for dimension 'x'"""
-        ),
+            coordax.LabeledAxis: no associated coordinate for dimension 'x'"""),
     ):
       coordax.Field.from_xarray(data_array, coord_types=[coordax.LabeledAxis])
 

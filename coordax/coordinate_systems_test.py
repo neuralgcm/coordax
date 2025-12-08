@@ -16,6 +16,7 @@ from absl.testing import parameterized
 import coordax
 from coordax import coordinate_systems
 import numpy as np
+import pytest
 
 
 class CoordinateSystemsTest(parameterized.TestCase):
@@ -432,6 +433,8 @@ class CoordinateSystemsTest(parameterized.TestCase):
       )
 
   def test_dummy_axis(self):
+    pytest.importorskip('xarray')
+
     axis = coordax.DummyAxis(name='x', size=0)
     self.assertEqual(axis.dims, ('x',))
     self.assertEqual(axis.shape, (0,))

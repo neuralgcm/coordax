@@ -22,7 +22,7 @@ from __future__ import annotations
 import collections
 import functools
 import operator
-from typing import Any, Callable, Literal, Self, TypeAlias, TypeGuard, TypeVar
+from typing import Any, Callable, Literal, Self, TYPE_CHECKING, TypeAlias, TypeGuard, TypeVar
 
 from coordax import coordinate_systems
 from coordax import named_axes as named_axes_lib
@@ -34,8 +34,9 @@ import numpy as np
 import treescope
 from treescope import lowering
 from treescope import rendering_parts
-# TODO(shoyer): consider making Xarray an optional dependency of core Coordax
-import xarray
+
+if TYPE_CHECKING:
+  import xarray
 
 
 Pytree: TypeAlias = Any
@@ -395,6 +396,8 @@ class Field:
       This DataArray will still be wrapping a jax.Array, and have operations
       implemented on jax.Array objects using the Python Array API interface.
     """
+    import xarray
+
     if not all(isinstance(dim, str) for dim in self.dims):
       raise ValueError(
           'can only convert Field objects with fully named dimensions to '

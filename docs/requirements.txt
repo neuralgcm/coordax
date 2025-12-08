@@ -6,4 +6,6 @@ myst-parser==4.0.1
 sphinx==8.2.3
 matplotlib==3.10.6
 
-# TODO - add coordax requirements?
+# optional coordax requirements
+chex
+xarray
