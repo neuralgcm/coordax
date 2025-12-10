@@ -23,6 +23,7 @@ import collections
 import functools
 import operator
 from typing import Any, Callable, Literal, Self, TYPE_CHECKING, TypeAlias, TypeGuard, TypeVar
+import warnings
 
 from coordax import coordinate_systems
 from coordax import named_axes as named_axes_lib
@@ -80,7 +81,6 @@ def tmp_axis_name(field: Field, excluded_names: set[str] | None = None) -> str:
   assert False  # unreachable
 
 
-# fmt: off
 @utils.export
 def cmap(
     fun: Callable[..., Any],
@@ -90,6 +90,7 @@ def cmap(
     *,
     vmap: Callable = jax.vmap,  # pylint: disable=g-bare-generic
 ) -> Callable[..., Any]:
+  # fmt: off
   """Vectorizes `fun` over coordinate dimensions of ``Field`` inputs.
 
   Args:
@@ -721,17 +722,43 @@ class Field:
 
 
 @utils.export
-def wrap(array: ArrayLike, *names: str | Coordinate | None) -> Field:
-  """Wraps a positional array as a ``Field``."""
-  field = Field(array)
+def field(array: ArrayLike, *names: str | Coordinate | None) -> Field:
+  """Wraps a positional array as a ``Field``.
+
+  `cx.field(array, *names)` is a shortcut for `cx.Field(array).tag(*names)`.
+
+  Args:
+    array: the array to wrap.
+    *names: the name or coordinates to attach to the array.
+
+  Returns:
+    A Field object.
+  """
+  field_ = Field(array)
   if names:
-    field = field.tag(*names)
-  return field
+    field_ = field_.tag(*names)
+  return field_
+
+
+def wrap(array: ArrayLike, *names: str | Coordinate | None) -> Field:
+  """Deprecated alias for `cx.field`."""
+  warnings.warn(
+      'cx.wrap() is deprecated, use cx.field() instead',
+      DeprecationWarning,
+      stacklevel=2,
+  )
+  return field(array, *names)
 
 
 @utils.export
 def wrap_like(array: ArrayLike, other: Field) -> Field:
   """Wraps `array` with the same coordinates as `other`."""
+  warnings.warn(
+      'cx.wrap_like() is deprecated, use cx.field(array, other.coordinate) '
+      'instead of cx.wrap_like(array, other)',
+      DeprecationWarning,
+      stacklevel=2,
+  )
   if isinstance(array, jax.typing.ArrayLike):
     array = jnp.asarray(array)
   if array.shape != other.shape:
@@ -753,15 +780,15 @@ def shape_struct_field(*axes: Coordinate) -> Field:
   coordinate = coordinate_systems.compose(*axes)
 
   def _materialize_dummy_field() -> Field:
-    return wrap(jnp.zeros(coordinate.shape), coordinate)
+    return field(jnp.zeros(coordinate.shape), coordinate)
 
   return jax.eval_shape(_materialize_dummy_field)
 
 
-# fmt: off
 def get_coordinate(
     field: Field, *, missing_axes: MissingAxes = 'dummy'
 ) -> Coordinate:
+  # fmt: off
   """Returns a single coordinate for a field.
 
   Args:
@@ -775,6 +802,7 @@ def get_coordinate(
   Returns:
     Coordinate associated with the `field`.
   """
+  # fmt: on
   if missing_axes not in ('dummy', 'skip', 'error'):
     raise ValueError(
         'missing axes must be one of "dummy", "skip", or "error", got'
@@ -789,20 +817,20 @@ def get_coordinate(
     elif missing_axes == 'error':
       raise ValueError(f'{field.dims=} has unnamed dims and {missing_axes=}')
   return coordinate_systems.compose(*axes)
-# fmt: on
+
 
 PyTree = Any
 
 
 @utils.export
 def tag(tree: PyTree, *dims: str | Coordinate | ellipsis | None) -> PyTree:
-  """Tag dimensions on all NamedArrays in a PyTree."""
+  """Tag dimensions on all fields in a PyTree."""
   tag_arrays = lambda x: x.tag(*dims) if is_field(x) else x
   return jax.tree.map(tag_arrays, tree, is_leaf=is_field)
 
 
 @utils.export
 def untag(tree: PyTree, *dims: str | Coordinate) -> PyTree:
-  """Untag dimensions from all NamedArrays in a PyTree."""
+  """Untag dimensions from all fields in a PyTree."""
   untag_arrays = lambda x: x.untag(*dims) if is_field(x) else x
   return jax.tree.map(untag_arrays, tree, is_leaf=is_field)

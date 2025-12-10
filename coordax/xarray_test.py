@@ -70,7 +70,7 @@ class XarrayTest(absltest.TestCase):
 
   def test_field_to_data_array_without_axes(self):
     data = np.arange(2 * 3).reshape((2, 3))
-    field = coordax.wrap(data, 'x', 'y')
+    field = coordax.field(data, 'x', 'y')
     actual = field.to_xarray()
     expected = xarray.DataArray(data, dims=['x', 'y'])
     xarray.testing.assert_identical(actual, expected)
@@ -78,7 +78,7 @@ class XarrayTest(absltest.TestCase):
   def test_field_to_data_array_with_sized_axis(self):
     data = np.arange(3)
     axis = coordax.SizedAxis('x', 3)
-    field = coordax.wrap(data, axis)
+    field = coordax.field(data, axis)
     actual = field.to_xarray()
     expected = xarray.DataArray(data, dims=['x'])
     xarray.testing.assert_identical(actual, expected)
@@ -87,7 +87,7 @@ class XarrayTest(absltest.TestCase):
     data = np.arange(3)
     ticks = np.array([1, 2, 3])
     axis = coordax.LabeledAxis('x', ticks)
-    field = coordax.wrap(data, axis)
+    field = coordax.field(data, axis)
     actual = field.to_xarray()
     expected = xarray.DataArray(data, dims=['x'], coords={'x': ticks})
     xarray.testing.assert_identical(actual, expected)
@@ -97,9 +97,9 @@ class XarrayTest(absltest.TestCase):
     custom_coord = AdhocCoordinate(
         dims=('x', 'y'),
         shape=(2, 3),
-        fields=lambda c: {'custom': coordax.wrap(data_2d, c)},
+        fields=lambda c: {'custom': coordax.field(data_2d, c)},
     )
-    field = coordax.wrap(10 * data_2d, custom_coord)
+    field = coordax.field(10 * data_2d, custom_coord)
     actual = field.to_xarray()
     expected = xarray.DataArray(
         data=10 * data_2d,
@@ -110,7 +110,7 @@ class XarrayTest(absltest.TestCase):
 
   def test_field_to_data_array_missing_dimension_names(self):
     data = np.arange(2 * 3).reshape((2, 3))
-    field = coordax.wrap(data)
+    field = coordax.field(data)
     with self.assertRaisesWithLiteralMatch(
         ValueError,
         'can only convert Field objects with fully named dimensions to'
@@ -123,14 +123,14 @@ class XarrayTest(absltest.TestCase):
     x = AdhocCoordinate(
         dims=('x',),
         shape=(3,),
-        fields=lambda c: {'z': coordax.wrap(0)},
+        fields=lambda c: {'z': coordax.field(0)},
     )
     y = AdhocCoordinate(
         dims=('y',),
         shape=(2,),
-        fields=lambda c: {'z': coordax.wrap(1)},
+        fields=lambda c: {'z': coordax.field(1)},
     )
-    field = coordax.wrap(np.zeros((3, 2)), x, y)
+    field = coordax.field(np.zeros((3, 2)), x, y)
     with self.assertRaisesRegex(
         ValueError, "inconsistent coordinate fields for 'z'"
     ):
@@ -142,7 +142,7 @@ class XarrayTest(absltest.TestCase):
         data=data, dims=['x', 'y'], coords={'y': [1, 2, 3]}
     )
     actual = coordax.Field.from_xarray(data_array)
-    expected = coordax.wrap(data, 'x', coordax.LabeledAxis('y', [1, 2, 3]))
+    expected = coordax.field(data, 'x', coordax.LabeledAxis('y', [1, 2, 3]))
     testing.assert_fields_equal(actual, expected)
 
   def test_data_array_to_field_with_sized_and_labeled_axis(self):
@@ -153,7 +153,7 @@ class XarrayTest(absltest.TestCase):
     actual = coordax.Field.from_xarray(
         data_array, coord_types=[coordax.SizedAxis, coordax.LabeledAxis]
     )
-    expected = coordax.wrap(
+    expected = coordax.field(
         data, coordax.SizedAxis('x', 2), coordax.LabeledAxis('y', [1, 2, 3])
     )
     testing.assert_fields_equal(actual, expected)
@@ -221,7 +221,7 @@ class XarrayTest(absltest.TestCase):
     custom_coord = AdhocCoordinate(dims=('x', 'y'), shape=(2, 3))
     custom_coord.from_xarray = lambda dims, _: custom_coord
     actual = coordax.Field.from_xarray(data_array, [custom_coord])
-    expected = coordax.wrap(data, custom_coord)
+    expected = coordax.field(data, custom_coord)
     testing.assert_fields_equal(actual, expected)
 
   def test_default_coord_types_roundtrip(self):

@@ -16,14 +16,13 @@
     Field.tag
     Field.untag
     Field.unwrap
+    field
     cmap
+    tag
+    untag
     is_field
     get_coordinate
-    tag
     tmp_axis_name
-    untag
-    wrap
-    wrap_like
 ```
 
 ## Coordinates

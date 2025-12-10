@@ -134,44 +134,44 @@ class FieldTest(parameterized.TestCase):
 
   def test_field_coordinate_property(self):
     x = coordax.LabeledAxis('x', np.arange(2))
-    field = coordax.wrap(np.zeros((2, 3)), x, 'y')
+    field = coordax.field(np.zeros((2, 3)), x, 'y')
     expected_coord = coordax.compose_coordinates(x, coordax.DummyAxis('y', 3))
     self.assertEqual(field.coordinate, expected_coord)
 
   def test_field_treedef_independent_of_tag_order(self):
     x, y = coordax.SizedAxis('x', 2), coordax.SizedAxis('y', 3)
-    field_a = coordax.wrap(np.ones((2, 3)), None, y)
+    field_a = coordax.field(np.ones((2, 3)), None, y)
     field_a = field_a.tag(x)
-    field_b = coordax.wrap(np.ones((2, 3)), x, None)
+    field_b = coordax.field(np.ones((2, 3)), x, None)
     field_b = field_b.tag(y)
     chex.assert_trees_all_equal(field_a, field_b)
 
   def test_field_binary_op_sum_simple(self):
-    field_a = coordax.wrap(np.arange(2 * 3 * 4).reshape((2, 4, 3)))
-    field_b = coordax.wrap(np.arange(2 * 3 * 4).reshape((2, 4, 3)))
+    field_a = coordax.field(np.arange(2 * 3 * 4).reshape((2, 4, 3)))
+    field_b = coordax.field(np.arange(2 * 3 * 4).reshape((2, 4, 3)))
     actual = operator.add(field_a, field_b)
-    expected_result = coordax.wrap(np.arange(2 * 3 * 4).reshape((2, 4, 3)) * 2)
+    expected_result = coordax.field(np.arange(2 * 3 * 4).reshape((2, 4, 3)) * 2)
     testing.assert_fields_allclose(actual=actual, desired=expected_result)
 
   def test_field_binary_op_sum_aligned(self):
-    field_a = coordax.wrap(np.arange(2 * 3).reshape((2, 3)), 'x', 'y')
-    field_b = coordax.wrap(np.arange(2 * 3)[::-1].reshape((3, 2)), 'y', 'x')
+    field_a = coordax.field(np.arange(2 * 3).reshape((2, 3)), 'x', 'y')
+    field_b = coordax.field(np.arange(2 * 3)[::-1].reshape((3, 2)), 'y', 'x')
     actual = operator.add(field_a, field_b)
-    expected_result = coordax.wrap(np.array([[5, 4, 3], [7, 6, 5]]), 'x', 'y')
+    expected_result = coordax.field(np.array([[5, 4, 3], [7, 6, 5]]), 'x', 'y')
     testing.assert_fields_allclose(actual=actual, desired=expected_result)
 
   def test_field_binary_op_product_aligned(self):
-    field_a = coordax.wrap(np.arange(2 * 3).reshape((2, 3))).tag('x', 'y')
-    field_b = coordax.wrap(np.arange(2), 'x')
+    field_a = coordax.field(np.arange(2 * 3).reshape((2, 3))).tag('x', 'y')
+    field_b = coordax.field(np.arange(2), 'x')
     actual = operator.mul(field_a, field_b)
-    expected_result = coordax.wrap(
+    expected_result = coordax.field(
         np.arange(2 * 3).reshape((2, 3)) * np.array([[0], [1]])
     ).tag('x', 'y')
     testing.assert_fields_allclose(actual=actual, desired=expected_result)
 
   def test_field_repr(self):
     expected = "<Field dims=('x', 'y') shape=(2, 3) axes={'y': LabeledAxis} >"
-    actual = coordax.wrap(
+    actual = coordax.field(
         np.array([[1, 2, 3], [4, 5, 6]]),
         'x',
         coordax.LabeledAxis('y', np.array([7, 8, 9])),
@@ -318,22 +318,22 @@ class FieldTest(parameterized.TestCase):
     y = coordax.LabeledAxis('y', np.linspace(5, 10, 5))
     z = coordax.LabeledAxis('z', np.linspace(0, np.pi, 7))
     yxz = coordax.compose_coordinates(y, x, z)
-    field = coordax.wrap(np.arange(4), x)
-    other = coordax.wrap(np.ones((5, 4, 7)), yxz)
+    field = coordax.field(np.arange(4), x)
+    other = coordax.field(np.ones((5, 4, 7)), yxz)
     expected_data = np.tile(np.arange(4)[np.newaxis, :, np.newaxis], (5, 1, 7))
     actual = field.broadcast_like(other)
-    expected = coordax.wrap(expected_data, yxz)
+    expected = coordax.field(expected_data, yxz)
     testing.assert_fields_allclose(actual=actual, desired=expected)
 
     actual = field.broadcast_like(other.untag('y'))
-    expected = coordax.wrap(expected_data, yxz).untag('y')
+    expected = coordax.field(expected_data, yxz).untag('y')
     testing.assert_fields_allclose(actual=actual, desired=expected)
 
   def test_broadcast_like_invalid_coords(self):
     x = coordax.LabeledAxis('x', np.linspace(0, 1, 4, endpoint=False))
     x_mismatch = coordax.LabeledAxis('x', np.linspace(0, 1, 4, endpoint=True))
-    field = coordax.wrap(np.arange(4), x)
-    other = coordax.wrap(np.ones((1, 4)), 'y', x_mismatch)
+    field = coordax.field(np.arange(4), x)
+    other = coordax.field(np.ones((1, 4)), 'y', x_mismatch)
     with self.assertRaisesRegex(
         ValueError,
         re.escape(
@@ -346,17 +346,17 @@ class FieldTest(parameterized.TestCase):
   def test_broadcast_to_coordinate(self):
     x, y = coordax.SizedAxis('x', 4), coordax.SizedAxis('y', 5)
     z = coordax.LabeledAxis('z', np.linspace(0, np.pi, 7))
-    field = coordax.wrap(np.arange(4), x)
+    field = coordax.field(np.arange(4), x)
     yxz = coordax.compose_coordinates(y, x, z)
     expected_data = np.tile(np.arange(4)[np.newaxis, :, np.newaxis], (5, 1, 7))
     actual = field.broadcast_like(yxz)
-    expected = coordax.wrap(expected_data, yxz)
+    expected = coordax.field(expected_data, yxz)
     testing.assert_fields_allclose(actual=actual, desired=expected)
 
   def test_cmap_cos(self):
     """Tests that cmap works as expected."""
     inputs = (
-        coordax.wrap(np.arange(2 * 3 * 4).reshape((2, 4, 3)))
+        coordax.field(np.arange(2 * 3 * 4).reshape((2, 4, 3)))
         .tag('x', 'y', 'z')
         .untag('x')
     )
@@ -373,7 +373,7 @@ class FieldTest(parameterized.TestCase):
   def test_cmap_norm(self):
     """Tests that cmap works as expected."""
     inputs = (
-        coordax.wrap(np.arange(2 * 3 * 5).reshape((2, 3, 5)))
+        coordax.field(np.arange(2 * 3 * 5).reshape((2, 3, 5)))
         .tag('x', coordax.LabeledAxis('y', np.arange(3)), 'z')
         .untag('x', 'z')
     )
@@ -391,15 +391,15 @@ class FieldTest(parameterized.TestCase):
     data = np.arange(2 * 3 * 4).reshape((2, 3, 4))
     x_axis = coordax.LabeledAxis('x', np.arange(2))
     z_axis = coordax.LabeledAxis('z', np.arange(4))
-    field = coordax.wrap(data, x_axis, None, z_axis)
+    field = coordax.field(data, x_axis, None, z_axis)
 
     with self.subTest('leading'):
-      expected = coordax.wrap(data.transpose(0, 2, 1), x_axis, z_axis, None)
+      expected = coordax.field(data.transpose(0, 2, 1), x_axis, z_axis, None)
       actual = coordax.cmap(lambda x: x, out_axes='leading')(field)
       testing.assert_fields_allclose(actual, expected)
 
     with self.subTest('trailing'):
-      expected = coordax.wrap(data.transpose(1, 0, 2), None, x_axis, z_axis)
+      expected = coordax.field(data.transpose(1, 0, 2), None, x_axis, z_axis)
       actual = coordax.cmap(lambda x: x, out_axes='trailing')(field)
       testing.assert_fields_allclose(actual, expected)
 
@@ -412,7 +412,7 @@ class FieldTest(parameterized.TestCase):
     data = np.arange(2 * 3 * 4).reshape((2, 3, 4))
     x_axis = coordax.LabeledAxis('x', np.arange(2))
     y_axis = coordax.LabeledAxis('y', np.arange(4))
-    field = coordax.wrap(data, x_axis, None, y_axis)
+    field = coordax.field(data, x_axis, None, y_axis)
 
     def normalize_fn(array_slice):
       return array_slice / jnp.linalg.norm(array_slice)
@@ -420,7 +420,7 @@ class FieldTest(parameterized.TestCase):
     actual = coordax.cpmap(normalize_fn)(field)
 
     expected_data = data / jnp.linalg.norm(data, axis=1)[:, np.newaxis, :]
-    expected = coordax.wrap(expected_data, x_axis, None, y_axis)
+    expected = coordax.field(expected_data, x_axis, None, y_axis)
     testing.assert_fields_allclose(actual, expected)
 
   def test_jit(self):
@@ -432,7 +432,7 @@ class FieldTest(parameterized.TestCase):
       trace_count += 1
       return x
 
-    field = coordax.wrap(np.arange(3), 'x')
+    field = coordax.field(np.arange(3), 'x')
     actual = f(field)
     testing.assert_fields_allclose(actual=actual, desired=field)
     self.assertEqual(trace_count, 1)
@@ -448,7 +448,7 @@ class FieldTest(parameterized.TestCase):
     scan_axis = coordax.LabeledAxis('scan', np.arange(length))
 
     def initialize(data):
-      return coordax.wrap(data, x_coord)
+      return coordax.field(data, x_coord)
 
     def body_fn(c, _):
       return (c + 1, c)
@@ -501,7 +501,7 @@ class FieldTest(parameterized.TestCase):
     data = np.arange(2 * 3).reshape((2, 3))
     inputs = {'a': coordax.Field(data), 'b': 42}
 
-    expected = {'a': coordax.wrap(data, 'x', 'y'), 'b': 42}
+    expected = {'a': coordax.field(data, 'x', 'y'), 'b': 42}
     tagged = coordax.tag(inputs, 'x', 'y')
     jax.tree.map(np.testing.assert_array_equal, tagged, expected)
 
@@ -652,7 +652,7 @@ class FieldTest(parameterized.TestCase):
     actual = array_2d.order_as('y', 'x')
     testing.assert_fields_equal(actual, expected)
 
-    actual = coordax.wrap_like(expected.data, expected)
+    actual = coordax.field(expected.data, expected.coordinate)
     testing.assert_fields_equal(actual, expected)
 
     array_3d = jax.tree.map(lambda x: x[jnp.newaxis, ...], array_2d)
@@ -665,18 +665,18 @@ class FieldTest(parameterized.TestCase):
 
     x = coordax.LabeledAxis('x', np.array([np.e, np.pi]))
     y = coordax.LabeledAxis('y', np.linspace(0, 1, 2))
-    other = coordax.wrap(
+    other = coordax.field(
         Duck(a=jnp.zeros((2, 2)), b=jnp.zeros((2, 2))), x, y
     )
     actual = field.tag(x).broadcast_like(other)
-    expected = coordax.wrap(
+    expected = coordax.field(
         Duck(a=jnp.array([[1, 1], [2, 2]]), b=jnp.array([[3, 3], [4, 4]])),
         x, y
     )
     testing.assert_fields_equal(actual, expected)
 
     actual = field.tag(y).broadcast_like(other)
-    expected = coordax.wrap(
+    expected = coordax.field(
         Duck(a=jnp.array([[1, 2], [1, 2]]), b=jnp.array([[3, 4], [3, 4]])),
         x, y
     )
@@ -701,7 +701,7 @@ class FieldTest(parameterized.TestCase):
       return x + y
 
     i_grid = coordax.LabeledAxis('i', np.arange(7))
-    y = coordax.wrap(jnp.arange(5 * 7).reshape((5, 7)), None, i_grid)
+    y = coordax.field(jnp.arange(5 * 7).reshape((5, 7)), None, i_grid)
     array_x = jnp.arange(5)[::-1]
     expected = coordax.cmap(foo)(array_x, y)
     actual = coordax.cmap(foo, vmap=custom_vmap)(NonPytree(a=array_x), y)

@@ -32,14 +32,15 @@ from coordax.coordinate_systems import (
 )
 from coordax.fields import (
     Field as Field,
+    field as field,
     is_field as is_field,
     tmp_axis_name as tmp_axis_name,
     shape_struct_field as shape_struct_field,
     cmap as cmap,
     cpmap as cpmap,
     get_coordinate as get_coordinate,
-    wrap_like as wrap_like,
-    wrap as wrap,
+    wrap_like as wrap_like,  # deprecated
+    wrap as wrap,  # deprecated
     tag as tag,
     untag as untag,
 )
