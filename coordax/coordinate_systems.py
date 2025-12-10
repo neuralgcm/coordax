@@ -85,9 +85,9 @@ class Coordinate(abc.ABC):
     raise NotImplementedError()
 
   @property
-  @abc.abstractmethod
   def fields(self) -> dict[str, fields.Field]:
-    """A maps from field names to their values."""
+    """Optional dict that maps from field names to their values."""
+    return {}
 
   @property
   def sizes(self) -> dict[str, int]:
@@ -173,10 +173,6 @@ class Scalar(Coordinate):
   @property
   def shape(self) -> tuple[int, ...]:
     return ()
-
-  @property
-  def fields(self) -> dict[str, fields.Field]:
-    return {}
 
 
 @utils.export
@@ -367,10 +363,6 @@ class SizedAxis(Coordinate):
   def shape(self) -> tuple[int, ...]:
     return (self.size,)
 
-  @property
-  def fields(self) -> dict[str, fields.Field]:
-    return {}
-
   def __repr__(self):
     return f'coordax.SizedAxis({self.name!r}, size={self.size})'
 
@@ -416,10 +408,6 @@ class DummyAxis(Coordinate):
   @property
   def shape(self) -> tuple[int, ...]:
     return (self.size,)
-
-  @property
-  def fields(self) -> dict[str, fields.Field]:
-    return {}
 
   def __repr__(self):
     return f'coordax.DummyAxis({self.name!r}, size={self.size})'
