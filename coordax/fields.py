@@ -22,6 +22,7 @@ from __future__ import annotations
 import collections
 import functools
 import operator
+import types
 from typing import Any, Callable, Literal, Self, TYPE_CHECKING, TypeAlias, TypeGuard, TypeVar
 import warnings
 
@@ -53,7 +54,9 @@ Array = ndarrays.Array
 ArrayLike = ndarrays.ArrayLike
 
 
-def _dimension_names(*names: str | Coordinate) -> tuple[str, ...]:
+def _dimension_names(
+    *names: str | Coordinate | types.EllipsisType,
+) -> tuple[str | types.EllipsisType, ...]:
   """Returns a tuple of dimension names from a list of names or coordinates."""
   dims_or_name_tuple = lambda x: x.dims if isinstance(x, Coordinate) else (x,)
   return sum([dims_or_name_tuple(c) for c in names], start=tuple())
@@ -73,7 +76,26 @@ def _axes_attrs(field: Field) -> str:
 
 @utils.export
 def new_axis_name(field: Field, excluded_names: set[str] | None = None) -> str:
-  """Returns axis name that is not present in `field` or `excluded_names`."""
+  """Returns axis name that is not present in `field` or `excluded_names`.
+
+  Args:
+    field: The field to generate a new axis name for.
+    excluded_names: Optional set of names to exclude.
+
+  Returns:
+    A new axis name.
+
+  Examples:
+    >>> import coordax as cx
+    >>> import jax.numpy as jnp
+    >>> field = cx.field(jnp.zeros((2, 3)))
+    >>> field2 = field.tag(cx.new_axis_name(field), ...)
+    >>> field2
+    <Field dims=('axis_0', None) shape=(2, 3) axes={} >
+    >>> field3 = field2.tag(cx.new_axis_name(field2))
+    >>> field3
+    <Field dims=('axis_0', 'axis_1') shape=(2, 3) axes={} >
+  """
   excluded_names = excluded_names or set()
   for i in range(field.ndim + len(excluded_names) + 1):
     name = f'axis_{i}'
@@ -105,10 +127,35 @@ def cmap(
   # fmt: off
   """Vectorizes `fun` over coordinate dimensions of ``Field`` inputs.
 
+  ``cmap`` is a "coordinate vectorizing map". It wraps an ordinary
+  positional-axis-based function so that it accepts ``Field`` objects as input
+  and produces ``Field`` objects as output, and vectorizes over all named
+  dimensions using ``jax.vmap``.
+
+  Unlike ``jax.vmap``, the axes to vectorize over are inferred automatically
+  from the named dimensions in the ``Field`` inputs, rather than being specified
+  as part of the mapping transformation. Specifically, each dimension name that
+  appears in any of the arguments is vectorized over jointly across all
+  arguments that include that dimension, and is then included as a named
+  dimension in the output. To make an axis visible to ``fun``, you can call
+  ``untag`` on the argument and pass the axis name(s) of interest; ``fun`` will
+  then see those axes as positional axes instead of mapping over them.
+
+  ``untag`` and ``cmap`` are together the primary ways to apply individual
+  operations to axes of a ``Field``. ``tag`` can then be used on the result to
+  re-bind names to positional axes.
+
+  Within ``fun``, any mapped-over axes will be accessible using standard JAX
+  collective operations like ``psum``, although using this is usually
+  unnecessary.
+
   Args:
-    fun: Function to vectorize over coordinate dimensions.
-    out_axes: Specifies strategy for choosing axis positions in the outputs.
-      Options include:
+    fun: Function to vectorize by name. This can take arbitrary arguments (even
+      non-JAX-arraylike arguments or "static" axis sizes), but must produce a
+      PyTree of JAX ArrayLike outputs.
+    out_axes: Specifies strategy for choosing labeled axis positions in the
+      outputs. Options include:
+
       - dict[str, int]: mapping from dimension name to axis position. Keys must
         include all named dimensions present in the inputs. Axis positions must
         be unique and either all positive or all negative.
@@ -119,31 +166,51 @@ def cmap(
       - 'same_as_input': dimension names will appear in the same order as in the
         inputs, where the inputs must all have the same named axes and the same
         number of dimensions as the outputs.
+
     vmap: Vectorizing transformation to use when mapping over named axes.
-      Defaults to jax.vmap. A different implementation can be used to make
+      Defaults to ``jax.vmap``. A different implementation can be used to make
       coordax compatible with custom objects (e.g. neural net modules).
 
   Returns:
-    A vectorized version of `fun` that applies original `fun` to locally
+    A vectorized version of ``fun`` that applies original ``fun`` to locally
     positional dimensions in inputs, while vectorizing over all coordinate
-    dimensions. All dimensions over which `fun` is vectorized will be present in
-    every output.
+    dimensions. All dimensions over which ``fun`` is vectorized will be present
+    in every output.
 
   Examples:
     >>> import coordax as cx
     >>> import jax.numpy as jnp
-    >>> field = cx.wrap(jnp.ones((2, 3, 1)), 'x', None, 'y')
-    >>> cx.cmap(jnp.sin)(field).dims  # named axes are trailing by default.
+
+    Named axes are trailing by default:
+
+    >>> field = cx.field(jnp.ones((2, 3, 1)), 'x', None, 'y')
+    >>> cx.cmap(jnp.sin)(field).dims
     (None, 'x', 'y')
     >>> cx.cmap(jnp.sin, out_axes='leading')(field).dims
     ('x', 'y', None)
     >>> cx.cmap(jnp.sin, out_axes='same_as_input')(field).dims
     ('x', None, 'y')
-    >>> # Multiple arguments result in all axes in order they appear in inputs.
-    >>> a = cx.wrap(jnp.ones((2, 3)), 'x', 'y')
-    >>> b = cx.wrap(jnp.ones((3, 4)), 'y', 'z')
+
+    Multiple field arguments result in all input axes in the outputs, in order
+    of appearence:
+
+    >>> a = cx.field(jnp.ones((2, 3)), 'x', 'y')
+    >>> b = cx.field(jnp.ones((3, 4)), 'y', 'z')
     >>> cx.cmap(jnp.add)(a, b).dims
     ('x', 'y', 'z')
+
+    ``cmap`` leverages JAX's pytree machinery, so arbitrarily nested inputs and
+    outputs are supported, as well as keyword arguments:
+
+    >>> z2 = cx.field(jnp.ones((2, 4)))
+    >>> z3 = cx.field(jnp.ones((3, 4)))
+    >>> cx.cmap(jnp.concat)([z2, z3], axis=0)
+    <Field dims=(None, None) shape=(5, 4) axes={} >
+
+  See also:
+    :func:`coordax.cpmap`
+    :meth:`coordax.Field.tag`
+    :meth:`coordax.Field.untag`
   """
   # fmt: on
   if hasattr(fun, '__name__'):
@@ -163,7 +230,9 @@ def cpmap(
     *,
     vmap: Callable = jax.vmap,  # pylint: disable=g-bare-generic
 ) -> Callable[..., Any]:
-  """Coordinate preserving cmap, alias for cmap(fun, out_axes='same_as_input').
+  """Coordinate preserving cmap.
+
+  ``cpmap(fun)`` is an alias for ``cmap(fun, out_axes='same_as_input')``.
 
   Primary use case is applying a function over positional axes while preserving
   the dimensionality and the coordinate order.
@@ -182,15 +251,25 @@ def cpmap(
   Examples:
     >>> import coordax as cx
     >>> import jax.numpy as jnp
-    >>> field = cx.wrap(jnp.ones((2, 3, 4)), 'x', None, 'y')
+
+    >>> field = cx.field(jnp.ones((2, 3, 4)), 'x', None, 'y')
     >>> cx.cpmap(lambda x: x**2)(field).dims
     ('x', None, 'y')
 
-    >>> # `cpmap` requires all inputs to have the same named axes ordering.
-    >>> # The following will raise a ValueError:
-    >>> a = cx.wrap(jnp.ones((2, 3)), 'x', 'y')
-    >>> b = cx.wrap(jnp.ones((3, 2)), 'y', 'x')
-    >>> # cx.cpmap(jnp.add)(a, b)  # Raises ValueError
+    ``cpmap`` requires all inputs to have the same named axes ordering:
+
+    >>> a = cx.field(jnp.ones((2, 3)), 'x', 'y')
+    >>> b = cx.field(jnp.ones((3, 2)), 'y', 'x')
+    >>> cx.cpmap(jnp.add)(a, b)  # doctest: +NORMALIZE_WHITESPACE
+    Traceback (most recent call last):
+    ...
+    ValueError: 'same_as_input' for out_axes requires all NamedArray inputs with
+    named axes to have the same `named_axes`. Found multiple distinct
+    `named_axes`:
+    [{'x': 0, 'y': 1}, {'y': 0, 'x': 1}]
+
+  See also:
+    :func:`coordax.cmap`
   """
   return cmap(fun, out_axes='same_as_input', vmap=vmap)
 
@@ -341,7 +420,43 @@ def _in_treescope_abbreviation_mode() -> bool:
 @utils.export
 @jax.tree_util.register_pytree_node_class
 class Field:
-  """An array with optional named dimensions and associated coordinates."""
+  # pylint: disable=line-too-long
+  """An array with optional named dimensions and associated coordinates.
+
+  Examples:
+    >>> import coordax as cx
+    >>> import jax.numpy as jnp
+    >>> x = cx.SizedAxis('x', 2)
+    >>> field = cx.Field(jnp.ones((2, 3, 4)), dims=('x', 'y', None), axes={'x': x})
+    >>> field
+    <Field dims=('x', 'y', None) shape=(2, 3, 4) axes={'x': SizedAxis} >
+    >>> field.data  # doctest: +ELLIPSIS
+    Array([[[1., 1., 1., 1.],
+            [1., 1., 1., 1.],
+            [1., 1., 1., 1.]],
+    <BLANKLINE>
+           [[1., 1., 1., 1.],
+            [1., 1., 1., 1.],
+            [1., 1., 1., 1.]]], dtype=float32)
+    >>> field.dims
+    ('x', 'y', None)
+    >>> field.axes
+    {'x': coordax.SizedAxis('x', size=2)}
+    >>> field.shape
+    (2, 3, 4)
+    >>> field.named_shape
+    {'x': 2, 'y': 3}
+    >>> field.positional_shape
+    (4,)
+    >>> field.named_dims
+    ('x', 'y')
+    >>> field.named_axes
+    {'x': 0, 'y': 1}
+    >>> field.coord_fields
+    {}
+    >>> field.coordinate
+    CartesianProduct(coordinates=(coordax.SizedAxis('x', size=2), coordax.DummyAxis('y', size=3), coordax.DummyAxis(None, size=4)))
+  """
 
   _named_array: named_axes_lib.NamedArray
   _axes: dict[str, Coordinate]
@@ -362,6 +477,15 @@ class Field:
         are positional.
       axes: optional mapping from dimension names to associated
         `coordax.Coordinate` objects.
+
+    Examples:
+      >>> import coordax as cx
+      >>> import jax.numpy as jnp
+      >>> cx.Field(jnp.ones((2, 3)), dims=('x', 'y'))
+      <Field dims=('x', 'y') shape=(2, 3) axes={} >
+
+    See also:
+      :func:`coordax.field`
     """
     self._named_array = named_axes_lib.NamedArray(data, dims)
     if axes is None:
@@ -385,6 +509,7 @@ class Field:
       data_array: xarray.DataArray,
       coord_types: Sequence[type[Coordinate]] = (LabeledAxis, DummyAxis),
   ) -> Self:
+    # pylint: disable=g-import-not-at-top,line-too-long
     """Converts an xarray.DataArray into a coordax.Field.
 
     Args:
@@ -396,6 +521,14 @@ class Field:
 
     Returns:
       A coordax.Field object with the same data as the input xarray.DataArray.
+
+    Examples:
+      >>> import coordax as cx
+      >>> import xarray as xr
+      >>> import numpy as np
+      >>> da = xr.DataArray(np.zeros((2, 3)), dims=('x', 'y'), coords={'x': [1, 2]})
+      >>> cx.Field.from_xarray(da)
+      <Field dims=('x', 'y') shape=(2, 3) axes={'x': LabeledAxis} >
     """
     field = cls(data_array.data)
     coord = coordinate_systems.from_xarray(data_array, coord_types)
@@ -408,6 +541,17 @@ class Field:
       An xarray.DataArray object with the same data as the input coordax.Field.
       This DataArray will still be wrapping a jax.Array, and have operations
       implemented on jax.Array objects using the Python Array API interface.
+
+    Examples:
+      >>> import coordax as cx
+      >>> import jax.numpy as jnp
+      >>> import numpy as np
+      >>> field = cx.field(jnp.zeros((2, 3)), 'x', 'y')
+      >>> field.to_xarray()  # doctest: +ELLIPSIS
+      <xarray.DataArray (x: 2, y: 3)>...
+      array([[0., 0., 0.],
+             [0., 0., 0.]], dtype=float32)
+      Dimensions without coordinates: x, y
     """
     import xarray
 
@@ -475,6 +619,7 @@ class Field:
 
   @property
   def ndim(self) -> int:
+    """Number of dimensions in the underlying data array."""
     return len(self.dims)
 
   @property
@@ -484,7 +629,7 @@ class Field:
 
   @property
   def named_dims(self) -> tuple[str, ...]:
-    """Namd dimensions of this array."""
+    """Named dimensions of this array."""
     return self.named_array.named_dims
 
   @property
@@ -515,7 +660,33 @@ class Field:
     return result
 
   def unwrap(self, *names: str | Coordinate) -> Array:
-    """Extracts underlying data from a field without named dimensions."""
+    """Extracts underlying data from a field without named dimensions.
+
+    This is effectively syntactic sugar for `assert field.named_dims == names`,
+    followed by returning `field.data`.
+
+    Args:
+      *names: Names of dimensions to check against.
+
+    Returns:
+      The underlying data array.
+
+    Raises:
+      ValueError: If the field has named dimensions that do not match `names`.
+
+    Examples:
+      >>> import coordax as cx
+      >>> import jax.numpy as jnp
+      >>> field = cx.field(jnp.ones((2, 3)), 'x', 'y')
+      >>> field.unwrap('x', 'y')
+      Array([[1., 1., 1.], [1., 1., 1.]], dtype=float32)
+
+      >>> field.unwrap('y', 'x')  # doctest: +NORMALIZE_WHITESPACE
+      Traceback (most recent call last):
+      ...
+      ValueError: Field has self.named_dims=('x', 'y') but names=('y', 'x') were
+      requested.
+    """
     names = _dimension_names(*names)
     if names != self.named_dims:
       raise ValueError(
@@ -524,7 +695,7 @@ class Field:
     return self.data
 
   def _validate_matching_coords(
-      self, dims_or_coords: Sequence[str | Coordinate]
+      self, dims_or_coords: Sequence[str | Coordinate | types.EllipsisType],
   ):
     """Validate that given coordinates are all found on this field."""
     axes = []
@@ -546,7 +717,34 @@ class Field:
         )
 
   def untag(self, *axis_order: str | Coordinate) -> Field:
-    """Returns a view of the field with the requested axes made positional."""
+    """Returns a view of the field with the requested axes made positional.
+
+    Args:
+      *axis_order: Names or coordinates of the axes to untag.
+
+    Returns:
+      A new Field with the specified axes converted to positional dimensions.
+
+    Examples:
+      >>> import coordax as cx
+      >>> import jax.numpy as jnp
+      >>> x = cx.SizedAxis('x', 2)
+      >>> field = cx.field(jnp.ones((2, 3)), x, 'y')
+
+      Untag by name:
+
+      >>> field.untag('y')
+      <Field dims=('x', None) shape=(2, 3) axes={'x': SizedAxis} >
+
+      Untag by coordinate (validates that the coordinate matches):
+
+      >>> field.untag(x)
+      <Field dims=(None, 'y') shape=(2, 3) axes={} >
+
+    See also:
+      :meth:`coordax.Field.tag`
+      :func:`coordax.untag`
+    """
     self._validate_matching_coords(axis_order)
     untag_dims = _dimension_names(*axis_order)
     named_array = self.named_array.untag(*untag_dims)
@@ -555,7 +753,66 @@ class Field:
     return result
 
   def tag(self, *names: str | Coordinate | ellipsis | None) -> Field:
-    """Returns a Field with attached coordinates to the positional axes."""
+    """Returns a Field with attached coordinates to the positional axes.
+
+    Args:
+      *names: Names or coordinates to assign to the positional axes. The total
+        number of dimensions corresponding to these objects must match the
+        number of positional axes in the field unless `...` is used to indicate
+        positions of untagged axes.
+
+    Returns:
+      A new Field with the specified dimensions tagged.
+
+    Examples:
+      >>> import coordax as cx
+      >>> import jax.numpy as jnp
+      >>> field = cx.Field(jnp.ones((2, 3)))
+      >>> field.tag('x', 'y')
+      <Field dims=('x', 'y') shape=(2, 3) axes={} >
+
+      Tagging with `Coordinate` objects adds them to the field:
+
+      >>> x = cx.SizedAxis('x', 2)
+      >>> field.tag(x, 'y')
+      <Field dims=('x', 'y') shape=(2, 3) axes={'x': SizedAxis} >
+
+      `None` leaves a dimension untagged:
+
+      >>> field.tag('x', None)
+      <Field dims=('x', None) shape=(2, 3) axes={} >
+
+      Ellipsis `...` can be indicate dimensions that should not be named:
+
+      >>> field.tag(..., 'y')
+      <Field dims=(None, 'y') shape=(2, 3) axes={} >
+
+      Tagging with the wrong number of arguments raises an error:
+
+      >>> field.tag('x')  # doctest: +NORMALIZE_WHITESPACE
+      Traceback (most recent call last):
+      ...
+      ValueError: there must be exactly as many dimensions given to `tag` as
+      there are positional axes in the array, but got ('x',) for 2 positional
+      axes.
+
+      You can also tag with multi-dimensional coordinates corresponding to
+      multiple array axes. If the multi-dimensional coordinate is a
+      :class:`coordax.CartesianProduct`, it is unpacked:
+
+      >>> x = cx.SizedAxis('x', 2)
+      >>> y = cx.SizedAxis('y', 3)
+      >>> xy = cx.compose(x, y)
+      >>> xy
+      CartesianProduct(axes={'x': SizedAxis, 'y': SizedAxis})
+      >>> field = cx.Field(jnp.zeros((2, 3)))
+      >>> field.tag(xy)
+      <Field dims=('x', 'y') shape=(2, 3) axes={'x': SizedAxis, 'y': SizedAxis} >
+
+    See also:
+      :meth:`coordax.Field.untag`
+      :func:`coordax.tag`
+    """
     tag_dims = _dimension_names(*names)
     tagged_array = self.named_array.tag(*tag_dims)
     axes = {}
@@ -572,8 +829,26 @@ class Field:
 
   # Note: Can't call this "transpose" like Xarray, to avoid conflicting with the
   # positional only ndarray method.
-  def order_as(self, *axis_order: str | Coordinate) -> Field:
-    """Returns a field with the axes in the given order."""
+  def order_as(self, *axis_order: str | Coordinate | types.EllipsisType) -> Field:
+    """Returns a field with the axes in the given order.
+
+    Args:
+      *axis_order: The desired order of axes, specified by name or coordinate.
+        `...` may be used once, to indicate all other dimensions in order of
+        appearance on this array.
+
+    Returns:
+      A new Field with the axes permuted to match the requested order.
+
+    Examples:
+      >>> import coordax as cx
+      >>> import jax.numpy as jnp
+      >>> field = cx.field(jnp.ones((2, 3)), 'x', 'y')
+      >>> field.order_as('y', 'x')
+      <Field dims=('y', 'x') shape=(3, 2) axes={} >
+      >>> field.order_as(..., 'x')
+      <Field dims=('y', 'x') shape=(3, 2) axes={} >
+    """
     self._validate_matching_coords(axis_order)
     ordered_dims = _dimension_names(*axis_order)
     ordered_array = self.named_array.order_as(*ordered_dims)
@@ -581,7 +856,22 @@ class Field:
     return result
 
   def broadcast_like(self, other: Self | Coordinate) -> Self:
-    """Returns a field broadcasted like `other`."""
+    """Returns a field broadcasted like `other`.
+
+    Args:
+      other: The field or coordinate to broadcast to.
+
+    Returns:
+      A new Field broadcasted to match `other`.
+
+    Examples:
+      >>> import coordax as cx
+      >>> import jax.numpy as jnp
+      >>> field = cx.field(jnp.zeros((2,)), 'x')
+      >>> other = cx.field(jnp.zeros((2, 3)), 'x', 'y')
+      >>> field.broadcast_like(other)
+      <Field dims=('x', 'y') shape=(2, 3) axes={} >
+    """
     if isinstance(other, Coordinate):
       other = shape_struct_field(other)
     for k, v in self.axes.items():
@@ -745,6 +1035,16 @@ def field(array: ArrayLike, *names: str | Coordinate | None) -> Field:
 
   Returns:
     A Field object.
+
+  Examples:
+    >>> import coordax as cx
+    >>> import jax.numpy as jnp
+    >>> cx.field(jnp.ones((2, 3)), 'x', 'y')
+    <Field dims=('x', 'y') shape=(2, 3) axes={} >
+
+  See also:
+    :class:`coordax.Field`
+    :meth:`coordax.Field.tag`
   """
   field_ = Field(array)
   if names:
@@ -790,7 +1090,21 @@ MissingAxes = Literal['error', 'dummy', 'skip']
 
 @utils.export
 def shape_struct_field(*axes: Coordinate) -> Field:
-  """Returns a Field with `axes` and a ShapeDtypeStruct in place of data."""
+  """Returns a Field with `axes` and a ShapeDtypeStruct in place of data.
+
+  Args:
+    *axes: The coordinates to use for the field.
+
+  Returns:
+    A Field with `ShapeDtypeStruct` data and the given axes.
+
+  Examples:
+    >>> import coordax as cx
+    >>> import jax
+    >>> axis = cx.SizedAxis('x', 5)
+    >>> cx.shape_struct_field(axis)
+    <Field dims=('x',) shape=(5,) axes={'x': SizedAxis} >
+  """
   coordinate = coordinate_systems.compose(*axes)
 
   def _materialize_dummy_field() -> Field:
@@ -816,6 +1130,14 @@ def get_coordinate(
 
   Returns:
     Coordinate associated with the `field`.
+
+  Examples:
+    >>> import coordax as cx
+    >>> import jax.numpy as jnp
+    >>> x = cx.SizedAxis('x', 2)
+    >>> field = cx.field(jnp.zeros((2, 3)), x, 'y')
+    >>> cx.get_coordinate(field)
+    CartesianProduct(coordinates=(coordax.SizedAxis('x', size=2), coordax.DummyAxis('y', size=3)))
   """
   # fmt: on
   if missing_axes not in ('dummy', 'skip', 'error'):
@@ -839,13 +1161,53 @@ PyTree = Any
 
 @utils.export
 def tag(tree: PyTree, *dims: str | Coordinate | ellipsis | None) -> PyTree:
-  """Tag dimensions on all fields in a PyTree."""
+  """Tag dimensions on all fields in a PyTree.
+
+  Args:
+    tree: The PyTree of fields.
+    *dims: Names or coordinates to tag the positional axes with.
+
+  Returns:
+    A new PyTree with all fields tagged.
+
+  Examples:
+    >>> import coordax as cx
+    >>> import jax.numpy as jnp
+    >>> tree = {'a': cx.Field(jnp.zeros((2,)))}
+    >>> tree
+    {'a': <Field dims=(None,) shape=(2,) axes={} >}
+    >>> cx.tag(tree, 'x')
+    {'a': <Field dims=('x',) shape=(2,) axes={} >}
+
+  See also:
+    :meth:`coordax.Field.tag`
+  """
   tag_arrays = lambda x: x.tag(*dims) if is_field(x) else x
   return jax.tree.map(tag_arrays, tree, is_leaf=is_field)
 
 
 @utils.export
 def untag(tree: PyTree, *dims: str | Coordinate) -> PyTree:
-  """Untag dimensions from all fields in a PyTree."""
+  """Untag dimensions from all fields in a PyTree.
+
+  Args:
+    tree: The PyTree of fields.
+    *dims: The axes to untag.
+
+  Returns:
+    A new PyTree with all fields untagged.
+
+  Examples:
+    >>> import coordax as cx
+    >>> import jax.numpy as jnp
+    >>> tree = {'a': cx.field(jnp.zeros((2,)), 'x')}
+    >>> tree
+    {'a': <Field dims=('x',) shape=(2,) axes={} >}
+    >>> cx.untag(tree, 'x')
+    {'a': <Field dims=(None,) shape=(2,) axes={} >}
+
+  See also:
+    :meth:`coordax.Field.untag`
+  """
   untag_arrays = lambda x: x.untag(*dims) if is_field(x) else x
   return jax.tree.map(untag_arrays, tree, is_leaf=is_field)

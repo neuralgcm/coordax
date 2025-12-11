@@ -36,7 +36,6 @@ jobs:
         python-version: ${{ matrix.python-version }}
         cache: 'pip'
     - name: Install Coordax (${{ matrix.variant }})
-      # 3. Use the mapped 'extras' variable here
       run: |
         pip install -e .[${{ matrix.extras }}]
     - name: Run unit tests

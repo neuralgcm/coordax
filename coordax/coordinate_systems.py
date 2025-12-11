@@ -65,9 +65,6 @@ class Coordinate(abc.ABC):
   `__hash__` and `__eq__` according to the requirements of keys in Python
   dictionaries. This is easiest to acheive with frozen dataclasses, but care
   must be taken when working with np.ndarray attributes.
-
-  TODO(shoyer): add documentation examples, including a version using ArrayKey
-  to wrap np.ndarray attributions.
   """
 
   @property
@@ -167,7 +164,7 @@ class ArrayKey:
 @jax.tree_util.register_static
 @dataclasses.dataclass(frozen=True)
 class Scalar(Coordinate):
-  """Zero dimensional sentinel coordinate used to label stand alone scalars."""
+  """Zero dimensional sentinel coordinate used to label scalar fields."""
 
   @property
   def dims(self) -> tuple[str, ...]:
@@ -280,7 +277,27 @@ def _consolidate_coordinates(
 
 @functools.partial(utils.export, module='coordax.coords')
 def canonicalize(*coordinates: Coordinate) -> tuple[Coordinate, ...]:
-  """Canonicalize coordinates into a minimum equivalent collection."""
+  """Canonicalize coordinates into a minimum equivalent collection.
+
+  Args:
+    *coordinates: The coordinates to canonicalize.
+
+  Returns:
+    A tuple of canonicalized coordinates, where ``CartesianProduct`` objects are
+    flattened, ``Scalar`` objects are removed and ``SelectedAxis`` objects are
+    merged back into the original coordinate if all axes are selected in order.
+
+  Examples:
+    >>> import coordax as cx
+    >>> x = cx.SizedAxis('x', 2)
+    >>> y = cx.SizedAxis('y', 3)
+    >>> cx.coords.canonicalize(x, y)
+    (coordax.SizedAxis('x', size=2), coordax.SizedAxis('y', size=3))
+
+    >>> xy = cx.coords.compose(x, y)
+    >>> cx.coords.canonicalize(xy)
+    (coordax.SizedAxis('x', size=2), coordax.SizedAxis('y', size=3))
+  """
   coordinates = _expand_coordinates(*coordinates)
   coordinates = _consolidate_coordinates(*coordinates)
   existing_dims = collections.Counter()
@@ -316,7 +333,10 @@ def _merge_dicts(dicts: Iterable[dict[K, V]]) -> dict[K, V]:
 @jax.tree_util.register_static
 @dataclasses.dataclass(frozen=True)
 class CartesianProduct(Coordinate):
-  """Coordinate defined as the outer product of independent coordinates."""
+  """Coordinate defined as the outer product of independent coordinates.
+
+  To construct a ``CartesianProduct``, use :func:`coordax.coords.compose`.
+  """
 
   coordinates: tuple[Coordinate, ...]
 
@@ -492,7 +512,22 @@ class LabeledAxis(Coordinate):
 
 @functools.partial(utils.export, module='coordax.coords')
 def compose(*coordinates: Coordinate) -> Coordinate:
-  """Compose coordinates into a unified coordinate system."""
+  # pylint: disable=line-too-long
+  """Compose coordinates into a unified coordinate system.
+
+  Args:
+    *coordinates: The coordinates to compose.
+
+  Returns:
+    A single coordinate object representing the Cartesian product of the inputs.
+
+  Examples:
+    >>> import coordax as cx
+    >>> x = cx.SizedAxis('x', 2)
+    >>> y = cx.SizedAxis('y', 3)
+    >>> cx.coords.compose(x, y)
+    CartesianProduct(coordinates=(coordax.SizedAxis('x', size=2), coordax.SizedAxis('y', size=3)))
+  """
   product = CartesianProduct(coordinates)
   match len(product.coordinates):
     case 0:
@@ -508,7 +543,24 @@ def insert_axes(
     coordinate: Coordinate,
     indices_to_axes: dict[int, Coordinate],
 ) -> Coordinate:
-  """Returns `coordinate` with extra axes inserted at specified positions."""
+  # pylint: disable=line-too-long
+  """Returns `coordinate` with extra axes inserted at specified positions.
+
+  Args:
+    coordinate: The coordinate system to modify.
+    indices_to_axes: A mapping from insertion index to the new coordinate to
+      insert. Indices are relative to the *output* coordinate system.
+
+  Returns:
+    A new coordinate object with the axes inserted.
+
+  Examples:
+    >>> import coordax as cx
+    >>> x = cx.SizedAxis('x', 2)
+    >>> z = cx.SizedAxis('z', 4)
+    >>> cx.coords.insert_axes(x, {1: z})
+    CartesianProduct(coordinates=(coordax.SizedAxis('x', size=2), coordax.SizedAxis('z', size=4)))
+  """
   indices_to_axes = indices_to_axes.copy()
   ndim = coordinate.ndim + len(indices_to_axes)
   normalize_idx = lambda i: i + ndim if i < 0 else i
@@ -528,6 +580,7 @@ def replace_axes(
     to_replace: Coordinate,
     replace_with: Coordinate,
 ) -> Coordinate:
+  # pylint: disable=line-too-long
   """Returns `coordinate` with `to_replace` replaced by `replace_with`.
 
   Args:
@@ -540,6 +593,17 @@ def replace_axes(
 
   Raises:
     ValueError: If `to_replace` is not a contiguous part of `coordinate`.
+
+  Examples:
+    >>> import coordax as cx
+    >>> x = cx.SizedAxis('x', 2)
+    >>> y = cx.SizedAxis('y', 3)
+    >>> xy = cx.coords.compose(x, y)
+    >>> xy
+    CartesianProduct(coordinates=(coordax.SizedAxis('x', size=2), coordax.SizedAxis('y', size=3)))
+    >>> z = cx.SizedAxis('z', 4)
+    >>> cx.coords.replace_axes(xy, x, z)
+    CartesianProduct(coordinates=(coordax.SizedAxis('z', size=4), coordax.SizedAxis('y', size=3)))
   """
   if not to_replace.dims:
     raise ValueError(f'`to_replace` must have dimensions, got {to_replace}')
@@ -567,19 +631,31 @@ def from_xarray(
     data_array: xarray.DataArray,
     coord_types: Sequence[type[Coordinate]] = (LabeledAxis, DummyAxis),
 ) -> Coordinate:
+  # pylint: disable=line-too-long
   """Convert the coordinates of an xarray.DataArray into a coordax.Coordinate.
 
   Args:
     data_array: xarray.DataArray whose coordinates should be converted.
-    coord_types: sequence of coordax.Coordinate subclasses with `from_xarray`
-      methods defined. The first coordinate class that returns a coordinate
-      object (indicating a match) will be used. By default, coordinates will use
-      only generic coordax.LabeledAxis objects. CardesianProduct type is omitted
-      from this sequence since it is introduced by the compose() method.
+    coord_types: sequence of ``coordax.Coordinate`` subclasses with
+      ``from_xarray`` methods defined. The first coordinate class that returns a
+      coordinate object (indicating a match) will be used. By default,
+      coordinates will use only generic ``LabeledAxis`` and ``DummyAxis``
+      objects.
 
   Returns:
     A coordax.Coordinate object representing the coordinates of the input
     DataArray.
+
+  Raises:
+    ValueError: if no matching coordinate is found.
+
+  Examples:
+    >>> import coordax as cx
+    >>> import xarray as xr
+    >>> import numpy as np
+    >>> da = xr.DataArray(np.zeros((2, 3)), dims=('x', 'y'), coords={'x': [1, 2]})
+    >>> cx.coords.from_xarray(da)  # doctest: +ELLIPSIS
+    CartesianProduct(coordinates=(coordax.LabeledAxis('x', ticks=array([1, 2])), coordax.DummyAxis('y', size=3)))
   """
   dims = data_array.dims
   coords = []
