@@ -11,13 +11,17 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Internal Coordax utilities."""
-from typing import TypeVar
+"""Public namespace for Coordax coordinate utilities."""
 
-
-T = TypeVar('T')
-
-
-def export(obj: T, module: str = 'coordax') -> T:
-  obj.__module__ = module
-  return obj
+# Note: import <name> as <name> is required for names to be exported.
+# See PEP 484 & https://github.com/jax-ml/jax/issues/7570
+# pylint: disable=g-multiple-import,useless-import-alias,g-importing-member,unused-import
+from coordax.coordinate_systems import (
+    canonicalize as canonicalize,
+    compose as compose,
+    insert_axes as insert_axes,
+    replace_axes as replace_axes,
+    from_xarray as from_xarray,
+    ArrayKey as ArrayKey,
+    NoCoordinateMatch as NoCoordinateMatch,
+)

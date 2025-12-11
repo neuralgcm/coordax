@@ -71,14 +71,26 @@ def _axes_attrs(field: Field) -> str:
   return '{' + ', '.join(f'{k!r}: {v}' for k, v in coord_names.items()) + '}'
 
 
-def tmp_axis_name(field: Field, excluded_names: set[str] | None = None) -> str:
+@utils.export
+def new_axis_name(field: Field, excluded_names: set[str] | None = None) -> str:
   """Returns axis name that is not present in `field` or `excluded_names`."""
   excluded_names = excluded_names or set()
   for i in range(field.ndim + len(excluded_names) + 1):
-    name = f'tmp_axis_{i}'
+    name = f'axis_{i}'
     if name not in excluded_names and name not in field.named_dims:
       return name
   assert False  # unreachable
+
+
+@utils.export
+def tmp_axis_name(field: Field, excluded_names: set[str] | None = None) -> str:
+  """Deprecated alias for `new_axis_name`."""
+  warnings.warn(
+      'cx.tmp_axis_name() is deprecated, use cx.new_axis_name() instead',
+      DeprecationWarning,
+      stacklevel=2,
+  )
+  return new_axis_name(field, excluded_names)
 
 
 @utils.export
@@ -740,6 +752,7 @@ def field(array: ArrayLike, *names: str | Coordinate | None) -> Field:
   return field_
 
 
+@utils.export
 def wrap(array: ArrayLike, *names: str | Coordinate | None) -> Field:
   """Deprecated alias for `cx.field`."""
   warnings.warn(
@@ -775,6 +788,7 @@ def is_field(value) -> TypeGuard[Field]:
 MissingAxes = Literal['error', 'dummy', 'skip']
 
 
+@utils.export
 def shape_struct_field(*axes: Coordinate) -> Field:
   """Returns a Field with `axes` and a ShapeDtypeStruct in place of data."""
   coordinate = coordinate_systems.compose(*axes)
@@ -785,6 +799,7 @@ def shape_struct_field(*axes: Coordinate) -> Field:
   return jax.eval_shape(_materialize_dummy_field)
 
 
+@utils.export
 def get_coordinate(
     field: Field, *, missing_axes: MissingAxes = 'dummy'
 ) -> Coordinate:

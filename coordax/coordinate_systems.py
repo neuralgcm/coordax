@@ -20,11 +20,13 @@ from __future__ import annotations
 
 import abc
 import collections
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 import dataclasses
+import functools
 import itertools
 import typing
 from typing import Any, Self, TYPE_CHECKING, TypeAlias, TypeVar
+import warnings
 
 from coordax import utils
 import jax
@@ -41,7 +43,7 @@ Pytree: TypeAlias = Any
 Sequence = collections.abc.Sequence
 
 
-@utils.export
+@functools.partial(utils.export, module='coordax.coords')
 @dataclasses.dataclass(frozen=True)
 class NoCoordinateMatch:
   """For use when a coordinate does not match an xarray.Coordinates object."""
@@ -142,6 +144,7 @@ class Coordinate(abc.ABC):
     raise NotImplementedError('from_xarray not implemented')
 
 
+@functools.partial(utils.export, module='coordax.coords')
 @dataclasses.dataclass(frozen=True)
 class ArrayKey:
   """Wrapper for a numpy array to make it hashable."""
@@ -275,6 +278,7 @@ def _consolidate_coordinates(
   return tuple(result)
 
 
+@functools.partial(utils.export, module='coordax.coords')
 def canonicalize(*coordinates: Coordinate) -> tuple[Coordinate, ...]:
   """Canonicalize coordinates into a minimum equivalent collection."""
   coordinates = _expand_coordinates(*coordinates)
@@ -455,7 +459,7 @@ class LabeledAxis(Coordinate):
     # needs local import to avoid circular dependency
     from coordax import fields  # pylint: disable=g-import-not-at-top
 
-    return {self.name: fields.wrap(self.ticks, self)}
+    return {self.name: fields.field(self.ticks, self)}
 
   def _components(self):
     return (self.name, ArrayKey(self.ticks))
@@ -486,7 +490,7 @@ class LabeledAxis(Coordinate):
     return cls(dim, coords[dim].data)
 
 
-@utils.export
+@functools.partial(utils.export, module='coordax.coords')
 def compose(*coordinates: Coordinate) -> Coordinate:
   """Compose coordinates into a unified coordinate system."""
   product = CartesianProduct(coordinates)
@@ -499,7 +503,7 @@ def compose(*coordinates: Coordinate) -> Coordinate:
       return product
 
 
-@utils.export
+@functools.partial(utils.export, module='coordax.coords')
 def insert_axes(
     coordinate: Coordinate,
     indices_to_axes: dict[int, Coordinate],
@@ -518,7 +522,7 @@ def insert_axes(
   return compose(*axes)
 
 
-@utils.export
+@functools.partial(utils.export, module='coordax.coords')
 def replace_axes(
     coordinate: Coordinate,
     to_replace: Coordinate,
@@ -558,6 +562,7 @@ def replace_axes(
   return compose(*axes)
 
 
+@functools.partial(utils.export, module='coordax.coords')
 def from_xarray(
     data_array: xarray.DataArray,
     coord_types: Sequence[type[Coordinate]] = (LabeledAxis, DummyAxis),
@@ -615,3 +620,48 @@ def from_xarray(
     dims = dims[coord.ndim :]
 
   return compose(*coords)
+
+
+_T = TypeVar('_T', bound=Callable)
+
+
+def _deprecated_alias(func: _T, old_name: str, new_name: str) -> _T:
+  """Returns a deprecated alias for a function."""
+
+  @functools.wraps(func)
+  def wrapper(*args, **kwargs):
+    warnings.warn(
+        f'{old_name} is deprecated. Please use {new_name} instead.',
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return func(*args, **kwargs)
+
+  return typing.cast(_T, wrapper)
+
+
+canonicalize_coordinates = _deprecated_alias(
+    canonicalize,
+    'coordax.canonicalize_coordinates',
+    'coordax.coords.canonicalize',
+)
+compose_coordinates = _deprecated_alias(
+    compose,
+    'coordax.compose_coordinates',
+    'coordax.coords.compose',
+)
+insert_axes_to_coordinate = _deprecated_alias(
+    insert_axes,
+    'coordax.insert_axes_to_coordinate',
+    'coordax.coords.insert_axes',
+)
+replace_axes_in_coordinate = _deprecated_alias(
+    replace_axes,
+    'coordax.replace_axes_in_coordinate',
+    'coordax.coords.replace_axes',
+)
+coordinates_from_xarray = _deprecated_alias(
+    from_xarray,
+    'coordax.coordinates_from_xarray',
+    'coordax.coords.from_xarray',
+)

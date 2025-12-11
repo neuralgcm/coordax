@@ -7,7 +7,7 @@ packages = ["coordax"]
 
 [project]
 name = "coordax"
-version = "0.1.6"  # keep sync with __init__.py
+version = "0.2.0"  # keep sync with __init__.py
 description = "Coordinate axes for scientific computing in JAX"
 authors = [
     {name = "Google LLC", email = "noreply@google.com"},

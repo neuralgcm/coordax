@@ -15,26 +15,28 @@
 # Note: import <name> as <name> is required for names to be exported.
 # See PEP 484 & https://github.com/jax-ml/jax/issues/7570
 # pylint: disable=g-multiple-import,useless-import-alias,g-importing-member
+from coordax import coords
 from coordax.coordinate_systems import (
     CartesianProduct as CartesianProduct,
     Coordinate as Coordinate,
+    NoCoordinateMatch as NoCoordinateMatch,  # deprecated
     DummyAxis as DummyAxis,
     LabeledAxis as LabeledAxis,
     Scalar as Scalar,
     SizedAxis as SizedAxis,
-    NoCoordinateMatch as NoCoordinateMatch,
     SelectedAxis as SelectedAxis,
-    canonicalize as canonicalize_coordinates,
-    compose as compose_coordinates,
-    insert_axes as insert_axes_to_coordinate,
-    replace_axes as replace_axes_in_coordinate,
-    from_xarray as coordinates_from_xarray,
+    canonicalize_coordinates as canonicalize_coordinates,  # deprecated
+    compose_coordinates as compose_coordinates,  # deprecated
+    insert_axes_to_coordinate as insert_axes_to_coordinate,  # deprecated
+    replace_axes_in_coordinate as replace_axes_in_coordinate,  # deprecated
+    coordinates_from_xarray as coordinates_from_xarray,  # deprecated
 )
 from coordax.fields import (
     Field as Field,
     field as field,
     is_field as is_field,
-    tmp_axis_name as tmp_axis_name,
+    new_axis_name as new_axis_name,
+    tmp_axis_name as tmp_axis_name,  # deprecated
     shape_struct_field as shape_struct_field,
     cmap as cmap,
     cpmap as cpmap,
@@ -50,4 +52,4 @@ from coordax.ndarrays import (
 )
 import coordax.testing  # pylint: disable=unused-import
 
-__version__ = "0.1.7"  # keep sync with pyproject.toml
+__version__ = '0.2.0'  # keep sync with pyproject.toml

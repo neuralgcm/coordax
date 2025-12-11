@@ -56,7 +56,7 @@ class AdhocCoordinate(coordax.Coordinate):
 
   @classmethod
   def from_xarray(cls, dims, coords):
-    return coordax.NoCoordinateMatch('not a match')
+    return coordax.coords.NoCoordinateMatch('not a match')
 
 
 AdhocCoordinate.__module__ = 'adhoc'

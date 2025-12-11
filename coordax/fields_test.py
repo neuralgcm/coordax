@@ -552,6 +552,19 @@ class FieldTest(parameterized.TestCase):
     with self.assertRaisesWithLiteralMatch(ValueError, expected_messsage):
       coordax.Field(np.arange(4), dims=('x',), axes={'x': axis})
 
+  def test_new_axis_name(self):
+    field = coordax.Field(np.zeros((2, 3)), dims=('x', 'y'))
+
+    new_name = coordax.new_axis_name(field)
+    self.assertEqual(new_name, 'axis_0')
+
+    new_name = coordax.new_axis_name(field, excluded_names={'axis_0'})
+    self.assertEqual(new_name, 'axis_1')
+
+    field = coordax.Field(np.zeros((2, 3)), dims=('axis_0', 'axis_1'))
+    new_name = coordax.new_axis_name(field)
+    self.assertEqual(new_name, 'axis_2')
+
   def test_shape_struct_field(self):
     x, y = coordax.DummyAxis('x', 2), coordax.LabeledAxis('y', np.arange(3))
     dummy_data = jax.ShapeDtypeStruct(x.shape + y.shape, jnp.float32)
@@ -762,6 +775,44 @@ class FieldTest(parameterized.TestCase):
       )
       with self.assertRaisesWithLiteralMatch(ValueError, expected_message):
         coordax.get_coordinate(field.untag('z'), missing_axes='error')
+
+  def test_deprecated_tmp_axis_name(self):
+    with self.assertWarnsRegex(
+        DeprecationWarning,
+        re.escape(
+            'cx.tmp_axis_name() is deprecated, use cx.new_axis_name() instead'
+        ),
+    ):
+      name = coordax.tmp_axis_name(coordax.field(np.zeros(3), 'x'))
+    self.assertEqual(name, 'axis_0')
+
+  def test_deprecated_wrap(self):
+    array = np.arange(3)
+
+    with self.assertWarnsRegex(
+        DeprecationWarning,
+        re.escape('cx.wrap() is deprecated, use cx.field() instead'),
+    ):
+      actual = coordax.wrap(array, 'x')
+
+    expected = coordax.field(array, 'x')
+    testing.assert_fields_equal(actual, expected)
+
+  def test_deprecated_wrap_like(self):
+    array = np.arange(3)
+    other = coordax.field(np.ones(3), 'x')
+
+    with self.assertWarnsRegex(
+        DeprecationWarning,
+        re.escape(
+            'cx.wrap_like() is deprecated, use cx.field(array,'
+            ' other.coordinate) instead of cx.wrap_like(array, other)'
+        ),
+    ):
+      actual = coordax.wrap_like(array, other)
+
+    expected = coordax.field(array, other.coordinate)
+    testing.assert_fields_equal(actual, expected)
 
 
 if __name__ == '__main__':

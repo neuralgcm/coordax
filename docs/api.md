@@ -18,11 +18,13 @@
     Field.unwrap
     field
     cmap
+    cpmap
     tag
     untag
     is_field
     get_coordinate
-    tmp_axis_name
+    new_axis_name
+    shape_struct_field
 ```
 
 ## Coordinates
@@ -38,8 +40,10 @@
     Scalar
     SizedAxis
     SelectedAxis
-    canonicalize_coordinates
-    compose_coordinates
+    coords.canonicalize
+    coords.compose
+    coords.insert_axes
+    coords.replace_axes
 ```
 
 ## Xarray compatibility
@@ -52,8 +56,8 @@
     Field.from_xarray
     Coordinate.to_xarray
     Coordinate.from_xarray
-    coordinates_from_xarray
-    NoCoordinateMatch
+    coords.from_xarray
+    coords.NoCoordinateMatch
 ```
 
 ## Testing
