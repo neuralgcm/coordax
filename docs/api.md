@@ -52,10 +52,8 @@
 .. autosummary::
     :toctree: _autosummary
 
+    from_xarray
     Field.to_xarray
-    Field.from_xarray
-    Coordinate.to_xarray
-    Coordinate.from_xarray
     coords.from_xarray
     coords.NoCoordinateMatch
 ```

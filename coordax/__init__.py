@@ -41,6 +41,7 @@ from coordax.fields import (
     cmap as cmap,
     cpmap as cpmap,
     get_coordinate as get_coordinate,
+    from_xarray as from_xarray,
     wrap_like as wrap_like,  # deprecated
     wrap as wrap,  # deprecated
     tag as tag,
@@ -52,4 +53,4 @@ from coordax.ndarrays import (
 )
 import coordax.testing  # pylint: disable=unused-import
 
-__version__ = '0.2.0'  # keep sync with pyproject.toml
+__version__ = '0.2.1'  # keep sync with pyproject.toml

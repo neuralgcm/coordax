@@ -508,31 +508,14 @@ class Field:
       cls,
       data_array: xarray.DataArray,
       coord_types: Sequence[type[Coordinate]] = (LabeledAxis, DummyAxis),
-  ) -> Self:
-    # pylint: disable=g-import-not-at-top,line-too-long
-    """Converts an xarray.DataArray into a coordax.Field.
-
-    Args:
-      data_array: xarray.DataArray to convert into a Field.
-      coord_types: sequence of coordax.Coordinate subclasses with `from_xarray`
-        methods defined. The first coordinate class that returns a coordinate
-        object (indicating a match) will be used. By default, coordinates will
-        use only generic coordax.LabeledAxis objects.
-
-    Returns:
-      A coordax.Field object with the same data as the input xarray.DataArray.
-
-    Examples:
-      >>> import coordax as cx
-      >>> import xarray as xr
-      >>> import numpy as np
-      >>> da = xr.DataArray(np.zeros((2, 3)), dims=('x', 'y'), coords={'x': [1, 2]})
-      >>> cx.Field.from_xarray(da)
-      <Field dims=('x', 'y') shape=(2, 3) axes={'x': LabeledAxis} >
-    """
-    field = cls(data_array.data)
-    coord = coordinate_systems.from_xarray(data_array, coord_types)
-    return field.tag(coord)
+  ) -> Field:
+    """Deprecated alias for coordax.from_xarray."""
+    warnings.warn(
+        'cx.Field.from_xarray() is deprecated, use cx.from_xarray() instead',
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return from_xarray(data_array, coord_types)
 
   def to_xarray(self) -> xarray.DataArray:
     """Convert this Field to an xarray.DataArray with NumPy array data.
@@ -1080,12 +1063,44 @@ def wrap_like(array: ArrayLike, other: Field) -> Field:
 
 
 @utils.export
+def from_xarray(
+    data_array: xarray.DataArray,
+    coord_types: Sequence[type[Coordinate]] = (LabeledAxis, DummyAxis),
+) -> Field:
+  # pylint: disable=g-import-not-at-top,line-too-long
+  """Create a coordax.Field from an xarray.DataArray.
+
+  Args:
+    data_array: xarray.DataArray to convert into a Field.
+    coord_types: sequence of ``coordax.Coordinate`` subclasses with
+      ``from_xarray`` methods defined. The first coordinate class that returns a
+      coordinate object (indicating a match) will be used. By default,
+      coordinates will use only generic ``LabeledAxis`` and ``DummyAxis``
+      objects.
+
+  Returns:
+    A coordax.Field object with the same data as the input xarray.DataArray.
+
+  Examples:
+    >>> import coordax as cx
+    >>> import xarray as xr
+    >>> import numpy as np
+    >>> da = xr.DataArray(np.zeros((2, 3)), dims=('x', 'y'), coords={'x': [1, 2]})
+    >>> cx.from_xarray(da)
+    <Field dims=('x', 'y') shape=(2, 3) axes={'x': LabeledAxis} >
+
+  See also:
+    :func:`coordax.coords.from_xarray`
+  """
+  data = data_array.data
+  coord = coordinate_systems.from_xarray(data_array, coord_types)
+  return field(data, coord)
+
+
+@utils.export
 def is_field(value) -> TypeGuard[Field]:
   """Returns True if `value` is of type `Field`."""
   return isinstance(value, Field)
-
-
-MissingAxes = Literal['error', 'dummy', 'skip']
 
 
 @utils.export
@@ -1111,6 +1126,9 @@ def shape_struct_field(*axes: Coordinate) -> Field:
     return field(jnp.zeros(coordinate.shape), coordinate)
 
   return jax.eval_shape(_materialize_dummy_field)
+
+
+MissingAxes = Literal['error', 'dummy', 'skip']
 
 
 @utils.export

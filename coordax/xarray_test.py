@@ -141,7 +141,7 @@ class XarrayTest(absltest.TestCase):
     data_array = xarray.DataArray(
         data=data, dims=['x', 'y'], coords={'y': [1, 2, 3]}
     )
-    actual = coordax.Field.from_xarray(data_array)
+    actual = coordax.from_xarray(data_array)
     expected = coordax.field(data, 'x', coordax.LabeledAxis('y', [1, 2, 3]))
     testing.assert_fields_equal(actual, expected)
 
@@ -150,7 +150,7 @@ class XarrayTest(absltest.TestCase):
     data_array = xarray.DataArray(
         data=data, dims=['x', 'y'], coords={'y': [1, 2, 3]}
     )
-    actual = coordax.Field.from_xarray(
+    actual = coordax.from_xarray(
         data_array, coord_types=[coordax.SizedAxis, coordax.LabeledAxis]
     )
     expected = coordax.field(
@@ -181,7 +181,7 @@ class XarrayTest(absltest.TestCase):
             coordax.SizedAxis: can only reconstruct SizedAxis objects from xarray dimensions without associated coordinate variables, but found a coordinate variable for dimension 'y'"""
         ),
     ):
-      coordax.Field.from_xarray(data_array, coord_types=[coordax.SizedAxis])
+      coordax.from_xarray(data_array, coord_types=[coordax.SizedAxis])
 
     with self.assertRaisesWithLiteralMatch(
         ValueError,
@@ -197,7 +197,7 @@ class XarrayTest(absltest.TestCase):
             Reasons why coordinate matching failed:
             coordax.LabeledAxis: no associated coordinate for dimension 'x'"""),
     ):
-      coordax.Field.from_xarray(data_array, coord_types=[coordax.LabeledAxis])
+      coordax.from_xarray(data_array, coord_types=[coordax.LabeledAxis])
 
     with self.assertRaisesWithLiteralMatch(
         ValueError,
@@ -213,14 +213,14 @@ class XarrayTest(absltest.TestCase):
             Reasons why coordinate matching failed:
             adhoc.AdhocCoordinate: not a match"""),
     ):
-      coordax.Field.from_xarray(data_array, coord_types=[AdhocCoordinate])
+      coordax.from_xarray(data_array, coord_types=[AdhocCoordinate])
 
   def test_data_array_to_field_custom_coord_types(self):
     data = np.arange(2 * 3).reshape((2, 3))
     data_array = xarray.DataArray(data=data, dims=['x', 'y'])
     custom_coord = AdhocCoordinate(dims=('x', 'y'), shape=(2, 3))
     custom_coord.from_xarray = lambda dims, _: custom_coord
-    actual = coordax.Field.from_xarray(data_array, [custom_coord])
+    actual = coordax.from_xarray(data_array, [custom_coord])
     expected = coordax.field(data, custom_coord)
     testing.assert_fields_equal(actual, expected)
 
@@ -229,9 +229,22 @@ class XarrayTest(absltest.TestCase):
     data_array = xarray.DataArray(
         data=data, dims=['x', 'y'], coords={'y': [1, 2, 3]}
     )
-    field = coordax.Field.from_xarray(data_array)
+    field = coordax.from_xarray(data_array)
     actual = field.to_xarray()
     xarray.testing.assert_identical(actual, data_array)
+
+  def test_field_from_xarray_deprecated(self):
+    data = np.arange(2 * 3).reshape((2, 3))
+    data_array = xarray.DataArray(
+        data=data, dims=['x', 'y'], coords={'y': [1, 2, 3]}
+    )
+    with self.assertWarnsRegex(
+        DeprecationWarning,
+        r'cx\.Field\.from_xarray\(\) is deprecated, use cx\.from_xarray\(\) instead',
+    ):
+      actual = coordax.Field.from_xarray(data_array)
+    expected = coordax.field(data, 'x', coordax.LabeledAxis('y', [1, 2, 3]))
+    testing.assert_fields_equal(actual, expected)
 
 
 if __name__ == '__main__':

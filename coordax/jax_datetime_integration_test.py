@@ -55,7 +55,7 @@ class IntegrationTest(absltest.TestCase):
         dims='time',
     )
 
-    actual_field = cx.Field.from_xarray(data_array)
+    actual_field = cx.from_xarray(data_array)
     testing.assert_fields_equal(actual_field, field)
 
     actual_data_array = field.to_xarray()
