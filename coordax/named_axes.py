@@ -15,8 +15,8 @@
 
 This module is intended to be nearly a drop-in replacement for Penzai's
 NamedArray, but with an alternative, simpler implementation. Dimensions are
-specified by a tuple, where each element is either a string or `None`. `None` is
-used to indicate strictly positional dimensions.
+specified by a tuple, where each element is either a string or ``None``.
+``None`` is used to indicate strictly positional dimensions.
 
 Some code and documentation is adapted from penzai.core.named_axes.
 """
@@ -49,7 +49,7 @@ def attrs_summary_type(
     named_array: NamedArray,
     inspect_data: bool,
 ) -> tuple[str, str, str]:
-  """Returns a summary of a `named_array` and its data type."""
+  """Returns a summary of a ``named_array`` and its data type."""
   if isinstance(named_array.data, jax.Array) and not isinstance(
       named_array.data, jax.core.Tracer
   ):
@@ -111,8 +111,8 @@ class NamedArrayAdapter(ndarray_adapters.NDArrayAdapter['NamedArray']):
         bad_names = set(mask.dims) - set(array.dims)
         if bad_names:
           raise ValueError(
-              'Valid mask must be broadcastable to the shape of `array`, but it'
-              f' had extra axis names {bad_names}'
+              'Valid mask must be broadcastable to the shape of ``array``, but '
+              f'it had extra axis names {bad_names}'
           )
         mask = mask.order_as(*(d for d in array.dims if d in mask.dims))
         mask_data = mask.data
@@ -240,8 +240,8 @@ def _normalize_out_axes(
         named_axes_list = [arr.named_axes for arr in named_arrays_with_axes]
         raise ValueError(
             "'same_as_input' for out_axes requires all NamedArray inputs with"
-            ' named axes to have the same `named_axes`. Found multiple'
-            f' distinct `named_axes`:\n{named_axes_list}'
+            ' named axes to have the same named_axes. Found multiple'
+            f' distinct named_axes on inputs:\n{named_axes_list}'
         )
       [unique_named_axes] = unique_named_axes
       return dict(unique_named_axes)
@@ -304,22 +304,22 @@ def nmap(
   """Automatically vectorizes ``fun`` over named dimensions.
 
   ``nmap`` is a "named dimension vectorizing map". It wraps an ordinary
-  positional-axis-based function so that it accepts NamedArrays as input and
-  produces NamedArrays as output, and vectorizes over all of named dimensions,
+  positional-axis-based function so that it accepts ``NamedArray``s as input and
+  produces ``NamedArray``s as output, and vectorizes over all of named dimensions,
   calling the original function with positionally-indexed slices corresponding
-  to each argument's `positional_shape`.
+  to each argument's ``positional_shape``.
 
-  Unlike `jax.vmap`, the axes to vectorize over are inferred
+  Unlike ``jax.vmap``, the axes to vectorize over are inferred
   automatically from the named dimensions in the NamedArray inputs, rather
   than being specified as part of the mapping transformation. Specifically, each
   dimension name that appears in any of the arguments is vectorized over jointly
   across all arguments that include that dimension, and is then included as a
   named dimension in the output. To make an axis visible to ``fun``, you can
-  call `untag` on the argument and pass the axis name(s) of interest; ``fun``
+  call ``untag`` on the argument and pass the axis name(s) of interest; ``fun``
   will then see those axes as positional axes instead of mapping over them.
 
-  `untag` and ``nmap`` are together the primary ways to apply individual
-  operations to axes of a NamedArray. `tag` can then be used on the result to
+  ``untag`` and ``nmap`` are together the primary ways to apply individual
+  operations to axes of a NamedArray. ``tag`` can then be used on the result to
   re-bind names to positional axes.
 
   Within ``fun``, any mapped-over axes will be accessible using standard JAX
@@ -347,8 +347,8 @@ def nmap(
 
   Returns:
     An automatically-vectorized version of ``fun``, which can optionally be
-    called with NamedArrays instead of ordinary arrays, and which will always
-    return NamedArrays for each of its output leaves. Any argument (or PyTree
+    called with ``NamedArray``s instead of ordinary arrays, and which will always
+    return ``NamedArray``s for each of its output leaves. Any argument (or PyTree
     leaf of an argument) that is a NamedArray will have its named dimensions
     vectorized over; ``fun`` will then be called with batch tracers
     corresponding to slices of the input array that are shaped like
@@ -452,8 +452,8 @@ def _nmap_with_doc(
     return jax.tree.map(wrap_output, result, is_leaf=is_array)
 
   docstr = (
-      f'Dimension-vectorized version of `{fun_name}`. Takes similar arguments'
-      f' as `{fun_name}` but accepts and returns NamedArray objects in place '
+      f'Dimension-vectorized version of ``{fun_name}``. Takes similar arguments'
+      f' as ``{fun_name}`` but accepts and returns NamedArray objects in place '
       'of arrays.'
   )
   if fun_doc:
@@ -536,8 +536,8 @@ def _wrap_array_method(
   wrapped_func.__module__ = __name__
   wrapped_func.__doc__ = (
       'Name-vectorized version of array method'
-      f' `{name} <numpy.ndarray.{name}>`. Takes similar arguments as'
-      f' `{name} <numpy.ndarray.{name}>` but accepts and returns NamedArray'
+      f' ``{name} <numpy.ndarray.{name}>``. Takes similar arguments as'
+      f' ``{name} <numpy.ndarray.{name}>`` but accepts and returns NamedArray'
       ' objects in place of regular arrays.'
   )
   return wrapped_func
@@ -560,7 +560,7 @@ class _ShapedLeaf:
 
 
 def _tmp_axis_name(x: NamedArray, excluded_names: set[str]) -> str:
-  """Returns axis name that is not present in `x` or `excluded_names`."""
+  """Returns axis name that is not present in ``x`` or ``excluded_names``."""
   for i in range(x.ndim):
     name = f'tmp_axis_{i}'
     if name not in excluded_names and name not in x.named_dims:
@@ -582,9 +582,9 @@ class NamedArray:
 
   Attributes:
     data: the underlying data array.
-    dims: tuple of dimension names, with the same length as `data.ndim`. Strings
-      indicate named axes, and may not be repeated. `None` indicates positional
-      axes.
+    dims: tuple of dimension names, with the same length as ``data.ndim``.
+      Strings indicate named axes, and may not be repeated. ``None`` indicates
+      positional axes.
   """
 
   _data: Array
@@ -600,9 +600,9 @@ class NamedArray:
     Arguments:
       data: the underlying data array.
       dims: optional tuple of dimension names, with the same length as
-        `data.ndim`. Strings indicate named axes, and may not be repeated.
-        `None` indicates positional axes. If `dims` is not provided, all axes
-        are positional.
+        ``data.ndim``. Strings indicate named axes, and may not be repeated.
+        ``None`` indicates positional axes. If ``dims`` is not provided, all
+        axes are positional.
     """
     data = ndarrays.to_array(data)
     if dims is None:
@@ -804,8 +804,8 @@ class NamedArray:
   def untag(self, *dims: str) -> Self:
     """Removes the requested dimension names.
 
-    `untag` can only be called on a `NamedArray` that does not have any
-    positional axes. It produces a new `NamedArray` where the axes with the
+    ``untag`` can only be called on a ``NamedArray`` that does not have any
+    positional axes. It produces a new ``NamedArray`` where the axes with the
     requested dimension names are now treated as positional instead.
 
     Args:
@@ -846,12 +846,12 @@ class NamedArray:
   def order_as(self, *dims: str | types.EllipsisType) -> Self:
     """Reorder the dimensions of an array.
 
-    All dimensions must be named. Use `tag` first to name any positional axes.
+    All dimensions must be named. Use ``tag`` first to name any positional axes.
 
     Args:
       *dims: dimension names that appear on this array, in the desired order on
-        the result. `...` may be used once, to indicate all other dimensions in
-        order of appearance on this array.
+        the result. ``...`` may be used once, to indicate all other dimensions
+        in order of appearance on this array.
 
     Returns:
       Array with transposed data and reordered dimensions, as indicated.

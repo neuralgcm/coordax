@@ -46,7 +46,7 @@ Sequence = collections.abc.Sequence
 @functools.partial(utils.export, module='coordax.coords')
 @dataclasses.dataclass(frozen=True)
 class NoCoordinateMatch:
-  """For use when a coordinate does not match an xarray.Coordinates object."""
+  """For use when no Coordax coordinate matches xarray coordinate."""
 
   reason: str
 
@@ -56,13 +56,13 @@ class Coordinate(abc.ABC):
   """Abstract class for coordinate objects.
 
   Coordinate subclasses are expected to obey several invariants:
-  1. Dimension names may not be repeated: `len(set(dims)) == len(dims)`
-  2. All dimensions must be named: `len(shape) == len(dims)`
+  1. Dimension names may not be repeated: ``len(set(dims)) == len(dims)``
+  2. All dimensions must be named: ``len(shape) == len(dims)``
 
   Every non-abstract Coordinate subclass must be registered as a "static"
   pytree node, e.g., by decorating the class with
-  `@jax.tree_util.register_static`. Static pytrees nodes must implement
-  `__hash__` and `__eq__` according to the requirements of keys in Python
+  ``@jax.tree_util.register_static``. Static pytrees nodes must implement
+  ``__hash__`` and ``__eq__`` according to the requirements of keys in Python
   dictionaries. This is easiest to acheive with frozen dataclasses, but care
   must be taken when working with np.ndarray attributes.
   """
@@ -73,7 +73,7 @@ class Coordinate(abc.ABC):
     """Dimension names of the coordinate.
 
     All subclasses must return a tuple of dimension names as strings, with the
-    exception of `DummyAxis`.
+    exception of ``DummyAxis``.
     """
     raise NotImplementedError()
 
@@ -135,8 +135,12 @@ class Coordinate(abc.ABC):
         values.
 
     Returns:
-      A matching instance of this coordinate or `NoCoordinateMatch` if this
-      coordinate does not match the xarray dimensions and coordinates.
+      A matching instance of this coordinate or ``NoCoordinateMatch`` if this
+      coordinate type does not match the xarray dimensions and coordinates.
+
+    See also:
+      :func:`coordax.from_xarray`
+      :func:`coordax.coords.from_xarray`
     """
     raise NotImplementedError('from_xarray not implemented')
 
@@ -513,6 +517,7 @@ class LabeledAxis(Coordinate):
 @functools.partial(utils.export, module='coordax.coords')
 def compose(*coordinates: Coordinate) -> Coordinate:
   # pylint: disable=line-too-long
+  # fmt: off
   """Compose coordinates into a unified coordinate system.
 
   Args:
@@ -528,6 +533,7 @@ def compose(*coordinates: Coordinate) -> Coordinate:
     >>> cx.coords.compose(x, y)
     CartesianProduct(coordinates=(coordax.SizedAxis('x', size=2), coordax.SizedAxis('y', size=3)))
   """
+  # fmt: on
   product = CartesianProduct(coordinates)
   match len(product.coordinates):
     case 0:
@@ -544,7 +550,8 @@ def insert_axes(
     indices_to_axes: dict[int, Coordinate],
 ) -> Coordinate:
   # pylint: disable=line-too-long
-  """Returns `coordinate` with extra axes inserted at specified positions.
+  # fmt: off
+  """Returns ``coordinate`` with extra axes inserted at specified positions.
 
   Args:
     coordinate: The coordinate system to modify.
@@ -561,6 +568,7 @@ def insert_axes(
     >>> cx.coords.insert_axes(x, {1: z})
     CartesianProduct(coordinates=(coordax.SizedAxis('x', size=2), coordax.SizedAxis('z', size=4)))
   """
+  # fmt: on
   indices_to_axes = indices_to_axes.copy()
   ndim = coordinate.ndim + len(indices_to_axes)
   normalize_idx = lambda i: i + ndim if i < 0 else i
@@ -581,7 +589,8 @@ def replace_axes(
     replace_with: Coordinate,
 ) -> Coordinate:
   # pylint: disable=line-too-long
-  """Returns `coordinate` with `to_replace` replaced by `replace_with`.
+  # fmt: off
+  """Returns ``coordinate`` with ``to_replace`` replaced by ``replace_with``.
 
   Args:
     coordinate: The coordinate system to modify.
@@ -589,10 +598,10 @@ def replace_axes(
     replace_with: The new coordinate to insert.
 
   Returns:
-    A new coordinate object with `to_replace` substituted by `replace_with`.
+    A new coordinate object with ``to_replace`` substituted by ``replace_with``.
 
   Raises:
-    ValueError: If `to_replace` is not a contiguous part of `coordinate`.
+    ValueError: If ``to_replace`` is not a contiguous part of ``coordinate``.
 
   Examples:
     >>> import coordax as cx
@@ -605,6 +614,7 @@ def replace_axes(
     >>> cx.coords.replace_axes(xy, x, z)
     CartesianProduct(coordinates=(coordax.SizedAxis('z', size=4), coordax.SizedAxis('y', size=3)))
   """
+  # fmt: on
   if not to_replace.dims:
     raise ValueError(f'`to_replace` must have dimensions, got {to_replace}')
 
@@ -632,10 +642,11 @@ def from_xarray(
     coord_types: Sequence[type[Coordinate]] = (LabeledAxis, DummyAxis),
 ) -> Coordinate:
   # pylint: disable=line-too-long
-  """Convert the coordinates of an xarray.DataArray into a coordax.Coordinate.
+  # fmt: off
+  """Convert coordinates of an ``xarray.DataArray`` into ``coordax.Coordinate``.
 
   Args:
-    data_array: xarray.DataArray whose coordinates should be converted.
+    data_array: ``xarray.DataArray`` whose coordinates should be converted.
     coord_types: sequence of ``coordax.Coordinate`` subclasses with
       ``from_xarray`` methods defined. The first coordinate class that returns a
       coordinate object (indicating a match) will be used. By default,
@@ -643,8 +654,9 @@ def from_xarray(
       objects.
 
   Returns:
-    A coordax.Coordinate object representing the coordinates of the input
-    DataArray.
+    A coordax.Coordinate object, constructed from any of the indicated types
+    (plus ``CartesianProduct`` and ``Scalar``), representing the coordinates of
+    the input DataArray.
 
   Raises:
     ValueError: if no matching coordinate is found.
@@ -654,9 +666,13 @@ def from_xarray(
     >>> import xarray as xr
     >>> import numpy as np
     >>> da = xr.DataArray(np.zeros((2, 3)), dims=('x', 'y'), coords={'x': [1, 2]})
-    >>> cx.coords.from_xarray(da)  # doctest: +ELLIPSIS
+    >>> cx.coords.from_xarray(da)
     CartesianProduct(coordinates=(coordax.LabeledAxis('x', ticks=array([1, 2])), coordax.DummyAxis('y', size=3)))
+
+  See also:
+    :func:`coordax.from_xarray`
   """
+  # fmt: on
   dims = data_array.dims
   coords = []
 

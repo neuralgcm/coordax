@@ -20,7 +20,7 @@ def assert_field_properties(
     rtol: float | None = 1e-5,
     atol: float | None = 1e-5,
 ):
-  """Asserts that a Field has expected properties."""
+  """Asserts that a ``Field`` has expected properties."""
   if data is not None:
     if atol is None and rtol is None:
       chex.assert_trees_all_equal(actual.data, data)
@@ -48,7 +48,7 @@ def assert_fields_allclose(
     rtol: float = 1e-5,
     atol: float = 1e-5,
 ):
-  """Asserts that two Fields are close and have matching coordinates."""
+  """Asserts that two ``Field``s are close and have matching coordinates."""
   assert_field_properties(
       actual=actual,
       data=desired.data,
@@ -63,7 +63,7 @@ def assert_fields_allclose(
 
 
 def assert_fields_equal(actual: coordax.Field, desired: coordax.Field):
-  """Asserts that two Fields are equal and have matching coordinates."""
+  """Asserts that two ``Field``s are equal and have matching coordinates."""
   assert_field_properties(
       actual=actual,
       data=desired.data,

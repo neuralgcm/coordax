@@ -76,7 +76,7 @@ def _axes_attrs(field: Field) -> str:
 
 @utils.export
 def new_axis_name(field: Field, excluded_names: set[str] | None = None) -> str:
-  """Returns axis name that is not present in `field` or `excluded_names`.
+  """Returns axis name that is not present in ``field`` or ``excluded_names``.
 
   Args:
     field: The field to generate a new axis name for.
@@ -106,7 +106,7 @@ def new_axis_name(field: Field, excluded_names: set[str] | None = None) -> str:
 
 @utils.export
 def tmp_axis_name(field: Field, excluded_names: set[str] | None = None) -> str:
-  """Deprecated alias for `new_axis_name`."""
+  """Deprecated alias for ``new_axis_name``."""
   warnings.warn(
       'cx.tmp_axis_name() is deprecated, use cx.new_axis_name() instead',
       DeprecationWarning,
@@ -125,7 +125,7 @@ def cmap(
     vmap: Callable = jax.vmap,  # pylint: disable=g-bare-generic
 ) -> Callable[..., Any]:
   # fmt: off
-  """Vectorizes `fun` over coordinate dimensions of ``Field`` inputs.
+  """Vectorizes ``fun`` over coordinate dimensions of ``Field`` inputs.
 
   ``cmap`` is a "coordinate vectorizing map". It wraps an ordinary
   positional-axis-based function so that it accepts ``Field`` objects as input
@@ -244,7 +244,7 @@ def cpmap(
       coordax compatible with custom objects (e.g. neural net modules).
 
   Returns:
-    A function that applies `fun` to positional axes of the inputs while
+    A function that applies ``fun`` to positional axes of the inputs while
     vectorizing over all coordinate dimensions. The coordinate order of the
     inputs is preserved in the outputs.
 
@@ -264,8 +264,8 @@ def cpmap(
     Traceback (most recent call last):
     ...
     ValueError: 'same_as_input' for out_axes requires all NamedArray inputs with
-    named axes to have the same `named_axes`. Found multiple distinct
-    `named_axes`:
+    named axes to have the same named_axes. Found multiple distinct
+    named_axes on inputs:
     [{'x': 0, 'y': 1}, {'y': 0, 'x': 1}]
 
   See also:
@@ -314,8 +314,8 @@ def _cmap_with_doc(
     )
 
   docstr = (
-      f'Dimension-vectorized version of `{fun_name}`. Takes similar arguments'
-      f' as `{fun_name}` but accepts and returns Fields in place of arrays.'
+      f'Dimension-vectorized version of ``{fun_name}``. Takes similar arguments'
+      f' as ``{fun_name}`` but accepts and returns Fields in place of arrays.'
   )
   if fun_doc:
     docstr += f'\n\nOriginal documentation:\n\n{fun_doc}'
@@ -405,8 +405,8 @@ def _wrap_array_method(name):
   wrapped_func.__module__ = __name__
   wrapped_func.__doc__ = (
       'Name-vectorized version of array method'
-      f' `{name} <numpy.ndarray.{name}>`. Takes similar arguments as'
-      f' `{name} <numpy.ndarray.{name}>` but accepts and returns Fields'
+      f' ``{name} <numpy.ndarray.{name}>``. Takes similar arguments as'
+      f' ``{name} <numpy.ndarray.{name}>`` but accepts and returns Fields'
       ' in place of regular arrays.'
   )
   return wrapped_func
@@ -421,6 +421,7 @@ def _in_treescope_abbreviation_mode() -> bool:
 @jax.tree_util.register_pytree_node_class
 class Field:
   # pylint: disable=line-too-long
+  # fmt: off
   """An array with optional named dimensions and associated coordinates.
 
   Examples:
@@ -457,6 +458,7 @@ class Field:
     >>> field.coordinate
     CartesianProduct(coordinates=(coordax.SizedAxis('x', size=2), coordax.DummyAxis('y', size=3), coordax.DummyAxis(None, size=4)))
   """
+  # fmt on
 
   _named_array: named_axes_lib.NamedArray
   _axes: dict[str, Coordinate]
@@ -472,11 +474,11 @@ class Field:
     Args:
       data: the underlying data array.
       dims: optional tuple of dimension names, with the same length as
-        `data.ndim`. Strings indicate named axes, and may not be repeated.
-        `None` indicates positional axes. If `dims` is not provided, all axes
-        are positional.
+        ``data.ndim``. Strings indicate named axes, and may not be repeated.
+        ``None`` indicates positional axes. If ``dims`` is not provided, all
+        axes are positional.
       axes: optional mapping from dimension names to associated
-        `coordax.Coordinate` objects.
+        ``coordax.Coordinate`` objects.
 
     Examples:
       >>> import coordax as cx
@@ -645,8 +647,9 @@ class Field:
   def unwrap(self, *names: str | Coordinate) -> Array:
     """Extracts underlying data from a field without named dimensions.
 
-    This is effectively syntactic sugar for `assert field.named_dims == names`,
-    followed by returning `field.data`.
+    This is effectively syntactic sugar for ``assert field.named_dims ==
+    names``,
+    followed by returning ``field.data``.
 
     Args:
       *names: Names of dimensions to check against.
@@ -655,7 +658,7 @@ class Field:
       The underlying data array.
 
     Raises:
-      ValueError: If the field has named dimensions that do not match `names`.
+      ValueError: If the field has named dimensions that do not match ``names``.
 
     Examples:
       >>> import coordax as cx
@@ -678,7 +681,8 @@ class Field:
     return self.data
 
   def _validate_matching_coords(
-      self, dims_or_coords: Sequence[str | Coordinate | types.EllipsisType],
+      self,
+      dims_or_coords: Sequence[str | Coordinate | types.EllipsisType],
   ):
     """Validate that given coordinates are all found on this field."""
     axes = []
@@ -741,8 +745,8 @@ class Field:
     Args:
       *names: Names or coordinates to assign to the positional axes. The total
         number of dimensions corresponding to these objects must match the
-        number of positional axes in the field unless `...` is used to indicate
-        positions of untagged axes.
+        number of positional axes in the field unless ``...`` is used to
+        indicate positions of untagged axes.
 
     Returns:
       A new Field with the specified dimensions tagged.
@@ -754,18 +758,18 @@ class Field:
       >>> field.tag('x', 'y')
       <Field dims=('x', 'y') shape=(2, 3) axes={} >
 
-      Tagging with `Coordinate` objects adds them to the field:
+      Tagging with ``Coordinate`` objects adds them to the field:
 
       >>> x = cx.SizedAxis('x', 2)
       >>> field.tag(x, 'y')
       <Field dims=('x', 'y') shape=(2, 3) axes={'x': SizedAxis} >
 
-      `None` leaves a dimension untagged:
+      ``None`` leaves a dimension untagged:
 
       >>> field.tag('x', None)
       <Field dims=('x', None) shape=(2, 3) axes={} >
 
-      Ellipsis `...` can be indicate dimensions that should not be named:
+      Ellipsis ``...`` can be indicate dimensions that should not be named:
 
       >>> field.tag(..., 'y')
       <Field dims=(None, 'y') shape=(2, 3) axes={} >
@@ -775,7 +779,7 @@ class Field:
       >>> field.tag('x')  # doctest: +NORMALIZE_WHITESPACE
       Traceback (most recent call last):
       ...
-      ValueError: there must be exactly as many dimensions given to `tag` as
+      ValueError: there must be exactly as many dimensions given to ``tag`` as
       there are positional axes in the array, but got ('x',) for 2 positional
       axes.
 
@@ -790,7 +794,8 @@ class Field:
       CartesianProduct(axes={'x': SizedAxis, 'y': SizedAxis})
       >>> field = cx.Field(jnp.zeros((2, 3)))
       >>> field.tag(xy)
-      <Field dims=('x', 'y') shape=(2, 3) axes={'x': SizedAxis, 'y': SizedAxis} >
+      <Field dims=('x', 'y') shape=(2, 3) axes={'x': SizedAxis, 'y': SizedAxis}
+      >
 
     See also:
       :meth:`coordax.Field.untag`
@@ -812,12 +817,14 @@ class Field:
 
   # Note: Can't call this "transpose" like Xarray, to avoid conflicting with the
   # positional only ndarray method.
-  def order_as(self, *axis_order: str | Coordinate | types.EllipsisType) -> Field:
+  def order_as(
+      self, *axis_order: str | Coordinate | types.EllipsisType
+  ) -> Field:
     """Returns a field with the axes in the given order.
 
     Args:
       *axis_order: The desired order of axes, specified by name or coordinate.
-        `...` may be used once, to indicate all other dimensions in order of
+        ``...`` may be used once, to indicate all other dimensions in order of
         appearance on this array.
 
     Returns:
@@ -839,13 +846,13 @@ class Field:
     return result
 
   def broadcast_like(self, other: Self | Coordinate) -> Self:
-    """Returns a field broadcasted like `other`.
+    """Returns a field broadcasted like ``other``.
 
     Args:
       other: The field or coordinate to broadcast to.
 
     Returns:
-      A new Field broadcasted to match `other`.
+      A new Field broadcasted to match ``other``.
 
     Examples:
       >>> import coordax as cx
@@ -1010,7 +1017,7 @@ class Field:
 def field(array: ArrayLike, *names: str | Coordinate | None) -> Field:
   """Wraps a positional array as a ``Field``.
 
-  `cx.field(array, *names)` is a shortcut for `cx.Field(array).tag(*names)`.
+  ``cx.field(array, *names)`` is a shortcut for ``cx.Field(array).tag(*names)``.
 
   Args:
     array: the array to wrap.
@@ -1037,7 +1044,7 @@ def field(array: ArrayLike, *names: str | Coordinate | None) -> Field:
 
 @utils.export
 def wrap(array: ArrayLike, *names: str | Coordinate | None) -> Field:
-  """Deprecated alias for `cx.field`."""
+  """Deprecated alias for ``cx.field``."""
   warnings.warn(
       'cx.wrap() is deprecated, use cx.field() instead',
       DeprecationWarning,
@@ -1048,7 +1055,7 @@ def wrap(array: ArrayLike, *names: str | Coordinate | None) -> Field:
 
 @utils.export
 def wrap_like(array: ArrayLike, other: Field) -> Field:
-  """Wraps `array` with the same coordinates as `other`."""
+  """Wraps ``array`` with the same coordinates as ``other``."""
   warnings.warn(
       'cx.wrap_like() is deprecated, use cx.field(array, other.coordinate) '
       'instead of cx.wrap_like(array, other)',
@@ -1068,6 +1075,7 @@ def from_xarray(
     coord_types: Sequence[type[Coordinate]] = (LabeledAxis, DummyAxis),
 ) -> Field:
   # pylint: disable=g-import-not-at-top,line-too-long
+  # fmt: off
   """Create a coordax.Field from an xarray.DataArray.
 
   Args:
@@ -1092,6 +1100,7 @@ def from_xarray(
   See also:
     :func:`coordax.coords.from_xarray`
   """
+  # fmt: on
   data = data_array.data
   coord = coordinate_systems.from_xarray(data_array, coord_types)
   return field(data, coord)
@@ -1099,19 +1108,19 @@ def from_xarray(
 
 @utils.export
 def is_field(value) -> TypeGuard[Field]:
-  """Returns True if `value` is of type `Field`."""
+  """Returns True if ``value`` is of type ``Field``."""
   return isinstance(value, Field)
 
 
 @utils.export
 def shape_struct_field(*axes: Coordinate) -> Field:
-  """Returns a Field with `axes` and a ShapeDtypeStruct in place of data.
+  """Returns a Field with ``axes`` and a ShapeDtypeStruct in place of data.
 
   Args:
     *axes: The coordinates to use for the field.
 
   Returns:
-    A Field with `ShapeDtypeStruct` data and the given axes.
+    A Field with ``ShapeDtypeStruct`` data and the given axes.
 
   Examples:
     >>> import coordax as cx
@@ -1142,12 +1151,12 @@ def get_coordinate(
     field: coordax.Field from which the coordinate will be extracted.
     missing_axes: controls how axes without coorinates are handled. Options are:
 
-      * ``'dummy'``: uses DummyAxis for dimensions without a coordinate.
+      * ``'dummy'``: uses ``DummyAxis`` for dimensions without a coordinate.
       * ``'skip'``: ignores dimensions without a coordinate.
       * ``'error'``: raises if dimensions without a coordinate are present.
 
   Returns:
-    Coordinate associated with the `field`.
+    Coordinate associated with the ``field``.
 
   Examples:
     >>> import coordax as cx

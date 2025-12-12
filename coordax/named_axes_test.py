@@ -784,9 +784,9 @@ class NamedAxesTest(parameterized.TestCase):
         ValueError,
         re.escape(
             "'same_as_input' for out_axes requires all NamedArray inputs with"
-            ' named axes to have the same `named_axes`. Found multiple'
-            " distinct `named_axes`:\n[{'x': 0, 'y': 1, 'z': 2}, {'z': 0,"
-            " 'y': 1, 'x': 2}]"
+            ' named axes to have the same named_axes. Found multiple'
+            " distinct named_axes on inputs:\n"
+            "[{'x': 0, 'y': 1, 'z': 2}, {'z': 0, 'y': 1, 'x': 2}]"
         ),
     ):
       named_axes.nmap(lambda x, y: x, out_axes='same_as_input')(array1, array2)
@@ -796,8 +796,8 @@ class NamedAxesTest(parameterized.TestCase):
     with self.assertRaisesWithLiteralMatch(
         ValueError,
         "'same_as_input' for out_axes requires all NamedArray inputs with"
-        ' named axes to have the same `named_axes`. Found multiple'
-        " distinct `named_axes`:\n[{'x': 0}, {'x': 0, 'y': 1}]"
+        ' named axes to have the same named_axes. Found multiple'
+        " distinct named_axes on inputs:\n[{'x': 0}, {'x': 0, 'y': 1}]"
     ):
       named_axes.nmap(lambda x, y: x, out_axes='same_as_input')(array1, array2)
 

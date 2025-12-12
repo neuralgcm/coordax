@@ -31,7 +31,7 @@ except ImportError:
 class NDArray(abc.ABC):
   """Abstract base class for non-JAX arrays that can be used with Coordax.
 
-  To register a new NDArray, use `coordax.register_ndarray()`.
+  To register a new NDArray, use {func}`coordax.register_ndarray`.
 
   NDArray instances are also expected to be registered as JAX pytree nodes:
   https://docs.jax.dev/en/latest/pytrees.html#extending-pytrees
@@ -45,12 +45,12 @@ class NDArray(abc.ABC):
   @property
   @abc.abstractmethod
   def size(self) -> int:
-    """Size of this array, typically `math.prod(self.shape)`."""
+    """Size of this array, typically ``math.prod(self.shape)``."""
 
   @property
   @abc.abstractmethod
   def ndim(self) -> int:
-    """Number of dimensions in this array, typcially `len(self.shape)`."""
+    """Number of dimensions in this array, typcially ``len(self.shape)``."""
 
   @abc.abstractmethod
   def transpose(self, axes: tuple[int, ...]) -> Self:
@@ -58,7 +58,7 @@ class NDArray(abc.ABC):
 
   # Note: __getitem__ is not yet used by Coordax, but we will likely want it in
   # the near the future.
-  # TODO(shoyer): Figure out the precise type for `value`.
+  # TODO(shoyer): Figure out the precise type for ``value``.
   @abc.abstractmethod
   def __getitem__(self, value) -> Self:
     """Index this array, returning a new array."""
