@@ -82,6 +82,7 @@ html_theme_options = {
     'light_logo': 'coordax_logo_light.png',
     'dark_logo': 'coordax_logo_dark.png',
 }
+html_favicon = '_static/favicon.ico'
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
