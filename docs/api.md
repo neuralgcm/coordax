@@ -69,11 +69,7 @@
     testing.assert_field_properties
 ```
 
-## Custom array types
-
-```{warning}
-This is _not_ a stable API.
-```
+## Experimental
 
 ```{eval-rst}
 .. autosummary::

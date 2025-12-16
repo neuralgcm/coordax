@@ -110,7 +110,7 @@ class NamedAxesTest(parameterized.TestCase):
     with self.assertRaisesWithLiteralMatch(
         TypeError,
         'data must be a np.ndarray, jax.Array or a duck-typed array registered'
-        ' with coordax.register_ndarray(), got dict: {}',
+        ' with coordax.experimental.register_ndarray(), got dict: {}',
     ):
       named_axes.NamedArray({})
     with self.assertRaisesRegex(

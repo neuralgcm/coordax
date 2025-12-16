@@ -720,6 +720,8 @@ class Field:
 
       Untag by name:
 
+      >>> field.untag('x')
+      <Field dims=(None, 'y') shape=(2, 3) axes={} >
       >>> field.untag('y')
       <Field dims=('x', None) shape=(2, 3) axes={'x': SizedAxis} >
 

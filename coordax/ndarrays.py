@@ -16,8 +16,10 @@
 from __future__ import annotations
 
 import abc
+import functools
 from typing import Any, Callable, Self, TypeVar
 
+from coordax import utils
 import jax
 import numpy as np
 
@@ -28,10 +30,15 @@ except ImportError:
 
 
 # TODO(shoyer): should this be a protocol?
+@functools.partial(utils.export, module='coordax.experimental')
 class NDArray(abc.ABC):
   """Abstract base class for non-JAX arrays that can be used with Coordax.
 
-  To register a new NDArray, use {func}`coordax.register_ndarray`.
+  THIS FEATURE IS EXPERIMENTAL, AND THE DETAILS ARE SUBJECT TO CHANGE. We
+  currently use it only to support jax-datetime, but expect it might be useful
+  in the future for other array types, e.g., with arbitrary units.
+
+  To register a new NDArray, use :func:`coordax.experimental.register_ndarray`.
 
   NDArray instances are also expected to be registered as JAX pytree nodes:
   https://docs.jax.dev/en/latest/pytrees.html#extending-pytrees
@@ -72,7 +79,7 @@ Array = np.ndarray | jax.Array | NDArray
 
 
 def to_array(data: ArrayLike) -> Array:
-  """Returns an NDArray compatible with JAX and Coordax.
+  """Returns an unlabeled NDArray compatible with JAX and Coordax.
 
   Args:
     data: a scalar, NumPy array, JAX array, or registered NDArray.
@@ -93,7 +100,8 @@ def to_array(data: ArrayLike) -> Array:
   if not isinstance(data, (np.ndarray, jax.Array, NDArray)):
     raise TypeError(
         'data must be a np.ndarray, jax.Array or a duck-typed array registered '
-        f'with coordax.register_ndarray(), got {type(data).__name__}: {data}'
+        'with coordax.experimental.register_ndarray(), got '
+        f'{type(data).__name__}: {data}'
     )
 
   return data
@@ -119,13 +127,19 @@ _FROM_NUMPY_FUNCS: list[
 ] = []
 
 
+@functools.partial(utils.export, module='coordax.experimental')
 def register_ndarray(
     array_type: type[T],
     is_matching_numpy_array: Callable[[np.ndarray], bool],
     to_numpy: Callable[[T], np.ndarray],
     from_numpy: Callable[[np.ndarray], T],
 ) -> type[T]:
-  """Registers a new duck-typed array type corresponding to a numpy dtype."""
+  # pylint: disable=g-doc-args
+  """Registers a new duck-typed array type corresponding to a numpy dtype.
+
+  See also:
+    :class:`coordax.experimental.NDArray`
+  """
   NDArray.register(array_type)
   _TO_NUMPY_FUNCS.append((array_type, to_numpy))
   _FROM_NUMPY_FUNCS.append((is_matching_numpy_array, from_numpy))
