@@ -53,4 +53,4 @@ from coordax.ndarrays import (
 )
 import coordax.testing  # pylint: disable=unused-import
 
-__version__ = '0.2.2'  # keep sync with pyproject.toml
+__version__ = '0.2.3'  # keep sync with pyproject.toml

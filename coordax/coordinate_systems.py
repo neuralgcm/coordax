@@ -25,7 +25,7 @@ import dataclasses
 import functools
 import itertools
 import typing
-from typing import Any, Self, TYPE_CHECKING, TypeAlias, TypeVar
+from typing import Any, Self, TYPE_CHECKING, Type, TypeAlias, TypeVar
 import warnings
 
 from coordax import utils
@@ -634,6 +634,46 @@ def replace_axes(
   axes = list(coordinate.axes)
   axes[start_index:end_index] = replace_with.axes
   return compose(*axes)
+
+
+@functools.partial(utils.export, module='coordax.coords')
+def extract(
+    coord: Coordinate,
+    component_type: Type[Coordinate] | tuple[Type[Coordinate], ...],
+) -> Coordinate:
+  """Extracts component of type `component_type` from the `coord`.
+
+  Args:
+    coord: The coordinate system to search.
+    component_type: The type(s) of coordinate to extract.
+
+  Returns:
+    The single coordinate component matching the given type(s).
+
+  Raises:
+    ValueError: If there is not exactly one component of the given type(s).
+
+  Examples:
+    >>> import coordax as cx
+    >>> x = cx.SizedAxis('x', 2)
+    >>> y = cx.SizedAxis('y', 3)
+    >>> cx.coords.extract(x, cx.SizedAxis)
+    coordax.SizedAxis('x', size=2)
+
+    >>> xy = cx.coords.compose(x, y)
+    >>> cx.coords.extract(xy, cx.SizedAxis)
+    Traceback (most recent call last):
+    ...
+    ValueError: Expected exactly one instance of ...
+  """
+  components = canonicalize(coord)
+  of_type = [c for c in components if isinstance(c, component_type)]
+  if len(of_type) != 1:
+    raise ValueError(
+        f'Expected exactly one instance of {component_type}, found {of_type}'
+    )
+  [result] = of_type
+  return result
 
 
 @functools.partial(utils.export, module='coordax.coords')
