@@ -459,6 +459,27 @@ class CoordinateSystemsTest(parameterized.TestCase):
     ):
       cx.CartesianProduct((x, y))
 
+  def test_extract(self):
+    x = cx.SizedAxis('x', 2)
+    y = cx.SizedAxis('y', 3)
+    z = cx.LabeledAxis('z', np.arange(4))
+    xy = cx.coords.compose(x, y)
+    xz = cx.coords.compose(x, z)
+
+    self.assertEqual(cx.coords.extract(x, cx.SizedAxis), x)
+    self.assertEqual(cx.coords.extract(z, cx.LabeledAxis), z)
+    self.assertEqual(cx.coords.extract(xz, cx.LabeledAxis), z)
+    self.assertEqual(cx.coords.extract(z, (cx.SizedAxis, cx.LabeledAxis)), z)
+
+    with self.assertRaisesRegex(ValueError, 'Expected exactly one instance'):
+      cx.coords.extract(xy, cx.SizedAxis)
+
+    with self.assertRaisesRegex(ValueError, 'Expected exactly one instance'):
+      cx.coords.extract(xz, (cx.SizedAxis, cx.LabeledAxis))
+
+    with self.assertRaisesRegex(ValueError, 'Expected exactly one instance'):
+      cx.coords.extract(x, cx.LabeledAxis)
+
   def test_deprecated_aliases(self):
     with self.assertWarnsRegex(
         DeprecationWarning,
