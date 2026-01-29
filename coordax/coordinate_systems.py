@@ -25,7 +25,7 @@ import dataclasses
 import functools
 import itertools
 import typing
-from typing import Any, Self, TYPE_CHECKING, Type, TypeAlias, TypeVar
+from typing import Any, Self, TYPE_CHECKING, Type, TypeAlias, TypeGuard, TypeVar
 import warnings
 
 from coordax import utils
@@ -35,7 +35,7 @@ import numpy as np
 if TYPE_CHECKING:
   # import only under TYPE_CHECKING to avoid circular dependency
   # pylint: disable=g-bad-import-order
-  from coordax import fields
+  from coordax import fields  # pylint: disable=unused-import
   import xarray
 
 
@@ -84,7 +84,7 @@ class Coordinate(abc.ABC):
     raise NotImplementedError()
 
   @property
-  def fields(self) -> dict[str, fields.Field]:
+  def fields(self) -> dict[str, 'fields.Field']:
     """Optional dict that maps from field names to their values."""
     return {}
 
@@ -110,7 +110,7 @@ class Coordinate(abc.ABC):
 
   def to_xarray(self) -> dict[str, xarray.Variable]:
     """Convert this coordinate into xarray variables."""
-    import xarray
+    import xarray  # pylint: disable=g-import-not-at-top
 
     variables = {}
     dims_set = {dim for dim in self.dims if dim is not None}
@@ -165,6 +165,12 @@ class ArrayKey:
 
 
 @utils.export
+def is_coord(obj: Any) -> TypeGuard[Coordinate]:
+  """Returns True if obj is a Coordinate."""
+  return isinstance(obj, Coordinate)
+
+
+@utils.export
 @jax.tree_util.register_static
 @dataclasses.dataclass(frozen=True)
 class Scalar(Coordinate):
@@ -211,7 +217,7 @@ class SelectedAxis(Coordinate):
     return (self.coordinate.shape[self.axis],)
 
   @property
-  def fields(self) -> dict[str, fields.Field]:
+  def fields(self) -> dict[str, 'fields.Field']:
     """A maps from field names to their values."""
     return self.coordinate.fields
 
@@ -364,7 +370,7 @@ class CartesianProduct(Coordinate):
     return _concat_tuples(c.shape for c in self.coordinates)
 
   @property
-  def fields(self) -> dict[str, fields.Field]:
+  def fields(self) -> dict[str, 'fields.Field']:
     """Returns a mapping from field names to their values."""
     return _merge_dicts(c.fields for c in self.coordinates)
 
@@ -479,7 +485,7 @@ class LabeledAxis(Coordinate):
     return self.ticks.shape
 
   @property
-  def fields(self) -> dict[str, fields.Field]:
+  def fields(self) -> dict[str, 'fields.Field']:
     # needs local import to avoid circular dependency
     from coordax import fields  # pylint: disable=g-import-not-at-top
 

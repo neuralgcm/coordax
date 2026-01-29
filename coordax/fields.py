@@ -538,7 +538,7 @@ class Field:
              [0., 0., 0.]], dtype=float32)
       Dimensions without coordinates: x, y
     """
-    import xarray
+    import xarray  # pylint: disable=g-import-not-at-top
 
     if not all(isinstance(dim, str) for dim in self.dims):
       raise ValueError(
