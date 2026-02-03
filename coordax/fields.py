@@ -1185,6 +1185,76 @@ def get_coordinate(
   return coordinate_systems.compose(*axes)
 
 
+@utils.export
+def contains_dims(
+    field_or_coord: Field | Coordinate,
+    dims: str | Sequence[str] | Coordinate,
+) -> bool:
+  """Returns True if the field or coordinate contains the given dimensions."""
+  if isinstance(dims, str):
+    dims = (dims,)
+
+  if isinstance(dims, Sequence):
+    return set(dims).issubset(field_or_coord.dims)
+
+  if coordinate_systems.is_coord(dims):
+    inputs = field_or_coord
+    coordinate = inputs.coordinate if is_field(inputs) else inputs
+    return set(dims.axes).issubset(coordinate.axes)
+
+  raise TypeError(f'Invalid type for dims: {type(dims)}')
+
+
+@utils.export
+def get_coordinate_part(
+    field_or_coord: Field | Coordinate,
+    dims: str | Sequence[str] | Coordinate,
+) -> Coordinate:
+  # fmt: off
+  """Returns a coordinate object associated with the given dimensions.
+
+  This is a convenience function for extracting a subset of the coordinate
+  associated with a field or coordinate allowing for flexible dimensions
+  specification. If `dims` is a coordinate, we check that it is a part of
+  `field_or_coord`. If it is specified as either a string or a string
+  sequence, the associated coordinate is extracted from `field_or_coord`.
+
+  Args:
+    field_or_coord: coordax.Field or coordax.Coordinate to extract part from.
+    dims: specification of the coordinate part to extract.
+
+  Returns:
+    Coordinate corresponding to `dims` in `field_or_coord`.
+
+  Raises:
+    ValueError: if `dims` is not a part of `field_or_coord`.
+
+  Examples:
+    >>> import coordax as cx
+    >>> import jax.numpy as jnp
+    >>> field = cx.field(jnp.zeros((2, 3)), 'x', 'y')
+    >>> cx.get_coordinate_part(field, 'x')
+    coordax.DummyAxis('x', size=2)
+
+    >>> expected_y = cx.DummyAxis('y', size=3)
+    >>> cx.get_coordinate_part(field.coordinate, expected_y)
+    coordax.DummyAxis('y', size=3)
+  """
+  # fmt: on
+  if not contains_dims(field_or_coord, dims):
+    raise ValueError(f'{dims=} is not a part of {field_or_coord=}.')
+
+  if coordinate_systems.is_coord(dims):
+    return dims  # dimensions is already a coordinate part of inputs.
+
+  inputs = field_or_coord
+  coordinate = inputs.coordinate if is_field(inputs) else inputs
+  if isinstance(dims, str):
+    dims = (dims,)
+  axes_by_dim = {d: ax for d, ax in zip(coordinate.dims, coordinate.axes)}
+  return coordinate_systems.compose(*[axes_by_dim[d] for d in dims])
+
+
 PyTree = Any
 
 
@@ -1216,12 +1286,17 @@ def tag(tree: PyTree, *dims: str | Coordinate | ellipsis | None) -> PyTree:
 
 
 @utils.export
-def untag(tree: PyTree, *dims: str | Coordinate) -> PyTree:
+def untag(
+    tree: PyTree,
+    *dims: str | Coordinate,
+    allow_missing: bool = False,
+) -> PyTree:
   """Untag dimensions from all fields in a PyTree.
 
   Args:
     tree: The PyTree of fields.
     *dims: The axes to untag.
+    allow_missing: If True, only untags `dims` that are present on each field.
 
   Returns:
     A new PyTree with all fields untagged.
@@ -1238,5 +1313,11 @@ def untag(tree: PyTree, *dims: str | Coordinate) -> PyTree:
   See also:
     :meth:`coordax.Field.untag`
   """
-  untag_arrays = lambda x: x.untag(*dims) if is_field(x) else x
-  return jax.tree.map(untag_arrays, tree, is_leaf=is_field)
+  if allow_missing:
+    def untag_fn(x):
+      if not is_field(x) or not any([contains_dims(x, d) for d in dims]):
+        return x
+      return x.untag(*[d for d in dims if contains_dims(x, d)])
+  else:
+    untag_fn = lambda x: x.untag(*dims) if is_field(x) else x
+  return jax.tree.map(untag_fn, tree, is_leaf=is_field)
