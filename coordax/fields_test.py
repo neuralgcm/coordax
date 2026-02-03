@@ -776,6 +776,62 @@ class FieldTest(parameterized.TestCase):
       with self.assertRaisesWithLiteralMatch(ValueError, expected_message):
         coordax.get_coordinate(field.untag('z'), missing_axes='error')
 
+  def test_untag_allow_missing(self):
+    f1 = coordax.field(jnp.zeros((2,)), 'x')
+    f2 = coordax.field(jnp.zeros((2,)), 'y')
+    tree = {'a': f1, 'b': f2}
+
+    with self.subTest('allow_missing_false'):
+      with self.assertRaises(ValueError):
+        coordax.untag(tree, 'x')
+
+    with self.subTest('allow_missing_true'):
+      untagged = coordax.untag(tree, 'x', allow_missing=True)
+      # f1 should be untagged (positional)
+      testing.assert_fields_equal(untagged['a'], coordax.field(jnp.zeros((2,))))
+      # f2 should remain unchanged (still has 'y')
+      testing.assert_fields_equal(untagged['b'], f2)
+
+    with self.subTest('mixed_coordinates'):
+      x_axis = coordax.SizedAxis('x', 2)
+      f1_c = coordax.field(jnp.zeros((2,)), x_axis)
+      tree_c = {'a': f1_c, 'b': f2}
+      untagged_c = coordax.untag(tree_c, x_axis, allow_missing=True)
+      testing.assert_fields_equal(
+          untagged_c['a'], f1_c.untag(x_axis)
+      )
+      testing.assert_fields_equal(untagged_c['b'], f2)
+
+  def test_get_coordinate_part(self):
+    x = coordax.SizedAxis('x', 2)
+    y = coordax.SizedAxis('y', 3)
+    field = coordax.field(jnp.zeros((2, 3)), x, y)
+
+    with self.subTest('by_string'):
+      part_x = coordax.get_coordinate_part(field, 'x')
+      self.assertEqual(part_x, x)
+
+    with self.subTest('by_list_of_strings'):
+      part_xy = coordax.get_coordinate_part(field, ['x', 'y'])
+      self.assertEqual(part_xy, field.coordinate)
+
+    with self.subTest('from_coordinate'):
+      part_y = coordax.get_coordinate_part(field.coordinate, 'y')
+      self.assertEqual(part_y, y)
+
+    with self.subTest('by_coordinate'):
+      self.assertEqual(coordax.get_coordinate_part(field, x), x)
+
+    with self.subTest('dims_not_in_inputs'):
+      with self.assertRaisesRegex(ValueError, 'is not a part of'):
+        coordax.get_coordinate_part(field, 'z')
+
+    with self.subTest('coordinate_not_in_inputs'):
+      z = coordax.SizedAxis('z', 4)
+      field = coordax.field(jnp.zeros((4, 3)), 'z', 'y')  # dummy 'z' != z.
+      with self.assertRaisesRegex(ValueError, 'is not a part of'):
+        coordax.get_coordinate_part(field, z)
+
   def test_deprecated_tmp_axis_name(self):
     with self.assertWarnsRegex(
         DeprecationWarning,
