@@ -25,6 +25,7 @@ from coordax.coordinate_systems import (
     Scalar as Scalar,
     SizedAxis as SizedAxis,
     SelectedAxis as SelectedAxis,
+    is_coord as is_coord,
     canonicalize_coordinates as canonicalize_coordinates,  # deprecated
     compose_coordinates as compose_coordinates,  # deprecated
     insert_axes_to_coordinate as insert_axes_to_coordinate,  # deprecated
@@ -35,12 +36,14 @@ from coordax.fields import (
     Field as Field,
     field as field,
     is_field as is_field,
+    contains_dims as contains_dims,
     new_axis_name as new_axis_name,
     tmp_axis_name as tmp_axis_name,  # deprecated
     shape_struct_field as shape_struct_field,
     cmap as cmap,
     cpmap as cpmap,
     get_coordinate as get_coordinate,
+    get_coordinate_part as get_coordinate_part,
     from_xarray as from_xarray,
     wrap_like as wrap_like,  # deprecated
     wrap as wrap,  # deprecated
@@ -53,4 +56,4 @@ from coordax.ndarrays import (
 )
 import coordax.testing  # pylint: disable=unused-import
 
-__version__ = '0.2.4'  # keep sync with pyproject.toml
+__version__ = '0.2.5'  # keep sync with pyproject.toml
