@@ -16,6 +16,7 @@
 ``Coordinate`` objects define a discretization schema, dimension names and
 provide methods & coordinate field values to facilitate computations.
 """
+
 from __future__ import annotations
 
 import abc
@@ -25,7 +26,7 @@ import dataclasses
 import functools
 import itertools
 import typing
-from typing import Any, Self, TYPE_CHECKING, Type, TypeAlias, TypeGuard, TypeVar
+from typing import Any, Literal, Self, TYPE_CHECKING, Type, TypeAlias, TypeGuard, TypeVar
 import warnings
 
 from coordax import utils
@@ -42,6 +43,8 @@ if TYPE_CHECKING:
 Pytree: TypeAlias = Any
 Sequence = collections.abc.Sequence
 
+SelMethod: TypeAlias = Literal['nearest'] | None
+
 
 @functools.partial(utils.export, module='coordax.coords')
 @dataclasses.dataclass(frozen=True)
@@ -49,6 +52,26 @@ class NoCoordinateMatch:
   """For use when no Coordax coordinate matches xarray coordinate."""
 
   reason: str
+
+
+def normalize_indexers(
+    indexers: dict[str | Coordinate, Any] | None,
+    **indexers_kwargs,
+) -> dict[str | Coordinate, Any]:
+  """Returns indexers replacing sequence with arrays, checks spec mode."""
+  if indexers is None:  # only kwargs is allowed.
+    normalized_indexers = dict(indexers_kwargs)
+  else:
+    if not isinstance(indexers, dict):
+      raise ValueError(f'Indexers must be a dict, got {type(indexers)}.')
+    if indexers_kwargs:
+      raise ValueError(
+          'Using dict and kwarg indexers simultaneously is dangerous and not'
+          f' supported, got {indexers=}, {indexers_kwargs=}.'
+      )
+    normalized_indexers = indexers
+  seq_to_array = lambda x: np.asarray(x) if isinstance(x, Sequence) else x
+  return {k: seq_to_array(v) for k, v in normalized_indexers.items()}
 
 
 @utils.export
@@ -108,6 +131,158 @@ class Coordinate(abc.ABC):
     else:
       return tuple(SelectedAxis(self, i) for i in range(self.ndim))
 
+  def isel(
+      self,
+      indexers: dict[str | Coordinate, Any] | None = None,
+      **indexers_kwargs,
+  ) -> Coordinate:
+    """Returns a new coordinate with the given integer indexers applied.
+
+    Note: This is an experimental feature, and may be changed or completely
+    removed in the future.
+
+    Note that ``isel`` should only be used with integer or slice indexers, or
+    array-like objects with integer or slice values. All keys provided to `isel`
+    are expected to be present in the dimension names or axes of a the
+    coordinate. By default, empty and ``slice(None)`` indexers return the
+    original coordinate. Otherwise a subclass-specific ``_isel`` is called.
+
+    For label-based selection, use ``sel`` instead that is implemented using
+    ``map_indexers`` in subclasses that allows mapping from label indexers to
+    integer indexers used by ``isel``.
+
+    Args:
+      indexers: A mapping from dimensions to indices, slices, or arrays.
+      **indexers_kwargs: The keyword arguments form of ``indexers``.
+
+    Returns:
+      A new coordinate with the selection applied.
+
+    Examples:
+      >>> import coordax as cx
+      >>> import numpy as np
+      >>> x = cx.SizedAxis('x', 5)
+      >>> x.isel(x=0)
+      Scalar()
+      >>> x.isel(x=slice(1, 4))
+      coordax.SizedAxis('x', size=3)
+      >>> x.isel(x=[0, 2, 4])
+      coordax.SizedAxis('x', size=3)
+
+      >>> y = cx.LabeledAxis('y', np.arange(5))
+      >>> y.isel(y=slice(0, 2))
+      coordax.LabeledAxis('y', ticks=array([0, 1]))
+    """
+    indexers = normalize_indexers(indexers, **indexers_kwargs)
+    self._validate_indexers(indexers)
+
+    indexer = indexers.get(self)
+    if not indexers or (isinstance(indexer, slice) and indexer == slice(None)):
+      return self
+
+    return self._isel(indexers)
+
+  def _isel(self, indexers: dict[str | Coordinate, Any]) -> Coordinate:
+    """Returns a new coordinate with the given indexers applied.
+
+    Args:
+      indexers: A mapping from dimensions to indices, slices, or arrays.
+        Guaranteed to be non-empty and contain only valid keys for this
+        coordinate.
+    """
+    raise NotImplementedError(f'{type(self).__name__} does not implement _isel')
+
+  def _validate_indexers(self, indexers: dict[str | Coordinate, Any]) -> None:
+    """Validates that the integer indexers are valid for this coordinate."""
+    unknown_dims = set(indexers.keys()) - set(self.axes) - set(self.dims)
+    if unknown_dims:
+      for k in unknown_dims:
+        if is_coord(k) and k.ndim > 1:
+          raise ValueError(
+              f'Indexing with coordinate {k=} with ndim > 1 is not supported.'
+          )
+      raise ValueError(
+          f'Dimensions {unknown_dims} do not exist in coordinate'
+          f' {type(self).__name__}'
+      )
+
+  def sel(
+      self,
+      indexers: dict[str | Coordinate, Any] | None = None,
+      method: Literal['nearest'] | None = None,
+      **indexers_kwargs,
+  ) -> Coordinate:
+    """Returns a new coordinate with the given selection applied.
+
+    Note: This is an experimental feature, and may be changed or completely
+    removed in the future.
+
+    ``sel`` is designed to work with label-based indexers, which may include
+    indexers that are not in the coordinate dimensions. The selection is
+    accomplished by mapping label-based indexers to integer-based indexers via
+    ``map_indexers``, which can be customized in subclasses. Indexers that are
+    not processed by ``map_indexers`` are considered "unused" and will raise an
+    error.
+
+    Args:
+      indexers: A mapping specifying labels to be selected from the coordinate.
+      method: Optional method to use for inexact matches. Cannot be used when
+        ``indexers`` contain slices. Default is `None`.
+      **indexers_kwargs: The keyword arguments form of ``indexers``.
+
+    Returns:
+      A new coordinate with the selection applied.
+
+    Examples:
+      >>> import coordax as cx
+      >>> import numpy as np
+      >>> x = cx.LabeledAxis('x', np.array([10, 20, 30]))
+      >>> x.sel(x=20)
+      Scalar()
+      >>> x.sel(x=slice(10, 20))
+      coordax.LabeledAxis('x', ticks=array([10, 20]))
+      >>> x.sel(x=12, method='nearest')
+      Scalar()
+    """
+    sel_indexers = normalize_indexers(indexers, **indexers_kwargs)
+    if not sel_indexers:
+      return self
+
+    unpacked_indexers, unpacked_c = unpack_and_validate_indexers(sel_indexers)
+    mapped_indexers, consumed = self.map_indexers(
+        unpacked_indexers, method=method
+    )
+
+    final_consumed = set()
+    for c in consumed:
+      if c in unpacked_c:
+        final_consumed.add(unpacked_c[c])
+      else:
+        final_consumed.add(c)
+
+    unused_sel_indexers = set(sel_indexers.keys()) - final_consumed
+    if unused_sel_indexers:
+      raise ValueError(
+          f'Indexers {unused_sel_indexers} were not processed by any component'
+          f' in {self}'
+      )
+
+    return self.isel(mapped_indexers)
+
+  def map_indexers(
+      self,
+      indexers: dict[str | Coordinate, Any],
+      method: Literal['nearest'] | None = None,
+  ) -> tuple[dict[str | Coordinate, Any], set[str | Coordinate]]:
+    """Maps label-based indexers to integer-based indexers (indices/slices)."""
+    del method  # unused.
+    # support `sel` on composite coords as long as they are not being indexed.
+    if not indexers or not any(dim in indexers for dim in self.dims + (self,)):
+      return {}, set()
+    raise NotImplementedError(
+        f'{type(self).__name__} does not implement map_indexers'
+    )
+
   def to_xarray(self) -> dict[str, xarray.Variable]:
     """Convert this coordinate into xarray variables."""
     import xarray  # pylint: disable=g-import-not-at-top
@@ -143,6 +318,42 @@ class Coordinate(abc.ABC):
       :func:`coordax.coords.from_xarray`
     """
     raise NotImplementedError('from_xarray not implemented')
+
+
+def unpack_and_validate_indexers(
+    indexers: dict[str | Coordinate, Any],
+) -> tuple[dict[str | Coordinate, Any], dict[str | Coordinate, Coordinate]]:
+  """Unpacks multidimensional indexers and raises if slice.step is not None."""
+  unpacked_indexers = {}
+  unpacked_coords = {}
+  # pytype: disable=attribute-error
+  for k, v in indexers.items():
+    if is_coord(k) and k.ndim > 1:
+      key_coord = k
+      if is_coord(v):
+        if key_coord.dims != v.dims:
+          raise ValueError(
+              f'{key_coord.dims=} do not match indexer dimensions {v.dims=}.'
+          )
+        for ax, v_ax in zip(key_coord.axes, v.axes):
+          unpacked_indexers[ax] = v_ax
+          assert isinstance(ax, Coordinate)
+          assert isinstance(key_coord, Coordinate)
+          unpacked_coords[ax] = key_coord
+      else:
+        raise ValueError(
+            f'Indexer for {key_coord=} with {key_coord.ndim=} > 0 must be a'
+            f' coordinate, got {v}.'
+        )
+    else:
+      if isinstance(v, slice) and v.step is not None:
+        raise ValueError(
+            f'Indexer for {k=} uses slice with {v.step=} != None, which is '
+            'not supported.'
+        )
+      unpacked_indexers[k] = v
+  # pytype: enable=attribute-error
+  return unpacked_indexers, unpacked_coords
 
 
 @functools.partial(utils.export, module='coordax.coords')
@@ -197,6 +408,14 @@ class Scalar(Coordinate):
   def shape(self) -> tuple[int, ...]:
     return ()
 
+  def map_indexers(
+      self,
+      indexers: dict[str | Coordinate, Any],
+      method: Literal['nearest'] | None = None,
+  ) -> tuple[dict[str | Coordinate, Any], set[str | Coordinate]]:
+    del indexers, method  # unused.
+    return {}, set()
+
 
 @utils.export
 @jax.tree_util.register_static
@@ -216,6 +435,20 @@ class SelectedAxis(Coordinate):
       raise ValueError(
           f'dimension {self.axis=} of {self.coordinate=} is not named'
       )
+
+  def map_indexers(
+      self,
+      indexers: dict[str | Coordinate, Any],
+      method: Literal['nearest'] | None = None,
+  ) -> tuple[dict[str | Coordinate, Any], set[str | Coordinate]]:
+    return self.coordinate.map_indexers(indexers, method=method)
+
+  def _isel(self, indexers: dict[str | Coordinate, Any]) -> Coordinate:
+    start_ndim = self.coordinate.ndim
+    new_coord = self.coordinate.isel(indexers)
+    if new_coord.ndim == start_ndim:
+      return SelectedAxis(new_coord, self.axis)
+    return Scalar()
 
   @property
   def dims(self) -> tuple[str, ...]:
@@ -392,6 +625,26 @@ class CartesianProduct(Coordinate):
     """Returns a tuple of Axis objects for each dimension."""
     return _concat_tuples(c.axes for c in self.coordinates)
 
+  def _isel(self, indexers: dict[str | Coordinate, Any]) -> Coordinate:
+    new_coords = []
+    for c in self.coordinates:  # already canonicalized.
+      c_indexers = {k: v for k, v in indexers.items() if contains_dims(c, k)}
+      new_coords.append(c.isel(c_indexers))
+    return compose(*new_coords)
+
+  def map_indexers(
+      self,
+      indexers: dict[str | Coordinate, Any],
+      method: Literal['nearest'] | None = None,
+  ) -> tuple[dict[str | Coordinate, Any], set[str | Coordinate]]:
+    mapped = {}
+    consumed = set()
+    for c in self.coordinates:
+      sub_mapped, sub_consumed = c.map_indexers(indexers, method=method)
+      mapped.update(sub_mapped)
+      consumed.update(sub_consumed)
+    return mapped, consumed
+
 
 @utils.export
 @jax.tree_util.register_static
@@ -409,6 +662,35 @@ class SizedAxis(Coordinate):
   @property
   def shape(self) -> tuple[int, ...]:
     return (self.size,)
+
+  def map_indexers(
+      self,
+      indexers: dict[str | Coordinate, Any],
+      method: Literal['nearest'] | None = None,
+  ) -> tuple[dict[str | Coordinate, Any], set[str | Coordinate]]:
+    if indexers and (self.name in indexers or self in indexers):
+      key = self.name if self.name in indexers else self
+      assert isinstance(key, (str, Coordinate))
+      if indexers[key] == self:
+        return {key: slice(None)}, {key}
+      raise ValueError(f'{type(self).__name__} does not support `sel`.')
+    return {}, set()
+
+  def _isel(self, indexers: dict[str | Coordinate, Any]) -> Coordinate:
+    key = self.name if self.name in indexers else self
+    indexer = indexers[key]
+    if isinstance(indexer, int):
+      return Scalar()
+
+    if isinstance(indexer, slice):
+      start, stop, step = indexer.indices(self.size)
+      new_size = len(range(start, stop, step))
+      return SizedAxis(self.name, new_size)
+
+    if hasattr(indexer, '__len__'):  # array or list.
+      return SizedAxis(self.name, len(indexer))
+
+    raise ValueError(f'Unsupported indexer type {type(indexer)}')
 
   def __repr__(self):
     return f'coordax.SizedAxis({self.name!r}, size={self.size})'
@@ -456,6 +738,35 @@ class DummyAxis(Coordinate):
   def shape(self) -> tuple[int, ...]:
     return (self.size,)
 
+  def map_indexers(
+      self,
+      indexers: dict[str | Coordinate, Any],
+      method: Literal['nearest'] | None = None,
+  ) -> tuple[dict[str | Coordinate, Any], set[str | Coordinate]]:
+    if indexers and (self.name in indexers or self in indexers):
+      key = self.name if self.name in indexers else self
+      assert isinstance(key, (str, Coordinate))
+      if indexers[key] == self:
+        return {key: slice(None)}, {key}
+      raise ValueError(f'{type(self).__name__} does not support `sel`.')
+    return {}, set()
+
+  def _isel(self, indexers: dict[str | Coordinate, Any]) -> Coordinate:
+    key = self.name if self.name in indexers else self
+    indexer = indexers[key]
+    if isinstance(indexer, int):
+      return Scalar()
+
+    if isinstance(indexer, slice):
+      start, stop, step = indexer.indices(self.size)
+      new_size = len(range(start, stop, step))
+      return DummyAxis(self.name, new_size)
+
+    if hasattr(indexer, '__len__'):
+      return DummyAxis(self.name, len(indexer))
+
+    raise ValueError(f'Unsupported indexer type {type(indexer)}')
+
   def __repr__(self):
     return f'coordax.DummyAxis({self.name!r}, size={self.size})'
 
@@ -473,8 +784,118 @@ class DummyAxis(Coordinate):
     return cls(name=dim, size=coords.sizes[dim])
 
 
-# TODO(dkochkov): consider storing tuple values instead of np.ndarray (which
-# could be exposed as a property).
+@functools.partial(utils.export, module='coordax.experimental')
+def map_indexers_using_ticks(
+    axis: Coordinate,
+    indexers: dict[str | Coordinate, Any],
+    ticks: np.ndarray | None = None,
+    ticks_are_sorted: bool | None = None,
+    method: Literal['nearest'] | None = None,
+) -> tuple[dict[str | Coordinate, Any], set[str | Coordinate]]:
+  """Maps indexers to ticks using either fancy indexing or slices.
+
+  Args:
+    axis: The coordinate for which to map indexers.
+    indexers: A mapping from dimensions to slices.
+    ticks: The tick values to use for mapping indexers. If None, ticks are taken
+      from the `axis`. Default is None. Can be used to map custom ticks.
+    ticks_are_sorted: Whether the `ticks` are sorted.
+    method: Method to use for inexact matches. Either None (default) for exact
+      matches or 'nearest'. Cannot be used when indexers contain slices.
+
+  Returns:
+    A tuple of (mapped_indexers, consumed_keys).
+
+  Raises:
+    KeyError: If any values in the indexer are not found in the ticks.
+    ValueError: If an unsupported method is provided or if ticks are not unique.
+  """
+  if axis.ndim != 1:
+    raise ValueError(
+        f'Mapping indexers using ticks requires 1D axis, got {axis.ndim=}'
+    )
+  [dim] = axis.dims
+  if axis not in indexers and dim not in indexers:
+    return {}, set()
+
+  ticks = ticks if ticks is not None else axis.fields[dim].data
+  if np.unique(ticks).size != ticks.size:
+    raise ValueError(f'Ticks must be unique, got {ticks}')
+  if ticks_are_sorted is None:
+    ticks_are_sorted = np.all(ticks[:-1] < ticks[1:])
+
+  key = axis if axis in indexers else dim
+  assert isinstance(key, (str, Coordinate))  # make pytype happy
+  value = indexers[key]
+  if is_coord(value) and value == axis:
+    return {key: slice(None)}, {key}
+  if is_coord(value):
+    if not isinstance(value, type(axis)) or value.dims != axis.dims:
+      raise ValueError(
+          'Indexing with axis requires same type and dims, got index axis'
+          f' {value} for slicing {axis=}.'
+      )
+    value = value.fields[dim].data
+
+  if isinstance(value, slice):
+    if method is not None:
+      raise NotImplementedError('Method argument not supported for slices')
+
+    start, stop = value.start, value.stop
+    if ticks_are_sorted:
+      start_idx, stop_idx = 0, ticks.size
+      if start is not None:
+        start_idx = np.searchsorted(ticks, start, side='left')
+      if stop is not None:
+        stop_idx = np.searchsorted(ticks, stop, side='right')
+
+      return {key: slice(start_idx, stop_idx)}, {key}
+    else:
+      mask = np.ones(ticks.size, dtype=bool)
+      if start is not None:
+        mask &= ticks >= start
+      if stop is not None:
+        mask &= ticks <= stop
+      return {key: np.where(mask)[0]}, {key}
+
+  if method == 'nearest':
+    if ticks_are_sorted:
+      candidates = np.searchsorted(ticks, value, side='left')
+      left = np.maximum(candidates - 1, 0)
+      right = np.minimum(candidates, len(ticks) - 1)
+      d_left = np.abs(value - ticks[left])
+      d_right = np.abs(value - ticks[right])
+      # In case of ties, prefer the left (smaller) index.
+      idx = np.where(d_left <= d_right, left, right)
+    elif np.ndim(value) == 0:
+      idx = np.abs(ticks - value).argmin()
+    else:
+      ticks_view = ticks.reshape((-1,) + (1,) * np.ndim(value))
+      idx = np.abs(ticks_view - value).argmin(axis=0)
+
+    if np.ndim(idx) == 0:
+      idx = int(idx)
+    return {key: idx}, {key}
+
+  if method is None:
+    sort_indices = None if ticks_are_sorted else np.argsort(ticks)
+    sorted_ticks = ticks if ticks_are_sorted else ticks[sort_indices]
+    indices = np.searchsorted(sorted_ticks, value)
+    if sort_indices is not None:
+      indices = sort_indices[indices]
+    unique_retrieved = np.sort(np.unique(ticks[indices]))
+    unique_value = np.sort(np.unique(value))
+    if unique_retrieved.size != unique_value.size or np.any(
+        unique_retrieved != unique_value
+    ):
+      raise KeyError(f'Not all values in {value} were found in {ticks}')
+    if np.ndim(value) == 0:  # if value is not an array, index must be an int.
+      indices = indices.item()
+    return {key: indices}, {key}
+
+  raise ValueError(f'Unknown method {method}')
+
+
 @utils.export
 @jax.tree_util.register_static
 @dataclasses.dataclass(frozen=True)
@@ -503,6 +924,31 @@ class LabeledAxis(Coordinate):
     from coordax import fields  # pylint: disable=g-import-not-at-top
 
     return {self.name: fields.field(self.ticks, self)}
+
+  @functools.cached_property
+  def _sorted_ticks(self) -> bool:
+    return np.all(self.ticks[:-1] <= self.ticks[1:])
+
+  def map_indexers(
+      self,
+      indexers: dict[str | Coordinate, Any],
+      method: Literal['nearest'] | None = None,
+  ) -> tuple[dict[str | Coordinate, Any], set[str | Coordinate]]:
+    return map_indexers_using_ticks(
+        axis=self,
+        indexers=indexers,
+        ticks=self.ticks,
+        ticks_are_sorted=self._sorted_ticks,
+        method=method,
+    )
+
+  def _isel(self, indexers: dict[str | Coordinate, Any]) -> Coordinate:
+    key = self.name if self.name in indexers else self
+    indexer = indexers[key]
+    if isinstance(indexer, int):
+      return Scalar()
+
+    return LabeledAxis(self.name, self.ticks[indexer])
 
   def _components(self):
     return (self.name, ArrayKey(self.ticks))
