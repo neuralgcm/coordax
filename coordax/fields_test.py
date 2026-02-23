@@ -802,6 +802,21 @@ class FieldTest(parameterized.TestCase):
       )
       testing.assert_fields_equal(untagged_c['b'], f2)
 
+  def test_contains_dims(self):
+    x_axis = coordax.SizedAxis('x', 2)
+    y_axis = coordax.SizedAxis('y', 3)
+    xy_axis = coordax.coords.compose(x_axis, y_axis)
+    field = coordax.field(jnp.zeros((2, 3)), x_axis, y_axis)
+    self.assertTrue(coordax.contains_dims(field, 'x'))
+    self.assertTrue(coordax.contains_dims(field, 'y'))
+    self.assertTrue(coordax.contains_dims(field, 'x', 'y'))
+    self.assertTrue(coordax.contains_dims(field, x_axis))
+    self.assertTrue(coordax.contains_dims(field, y_axis))
+    self.assertTrue(coordax.contains_dims(field, x_axis, y_axis))
+    self.assertTrue(coordax.contains_dims(field, xy_axis))
+    self.assertFalse(coordax.contains_dims(field, 'z'))
+    self.assertFalse(coordax.contains_dims(field, coordax.SizedAxis('z', 4)))
+
   def test_get_coordinate_part(self):
     x = coordax.SizedAxis('x', 2)
     y = coordax.SizedAxis('y', 3)
@@ -812,7 +827,7 @@ class FieldTest(parameterized.TestCase):
       self.assertEqual(part_x, x)
 
     with self.subTest('by_list_of_strings'):
-      part_xy = coordax.get_coordinate_part(field, ['x', 'y'])
+      part_xy = coordax.get_coordinate_part(field, 'x', 'y')
       self.assertEqual(part_xy, field.coordinate)
 
     with self.subTest('from_coordinate'):
@@ -822,11 +837,15 @@ class FieldTest(parameterized.TestCase):
     with self.subTest('by_coordinate'):
       self.assertEqual(coordax.get_coordinate_part(field, x), x)
 
-    with self.subTest('dims_not_in_inputs'):
+    with self.subTest('by_composite_coordinate'):
+      xy = coordax.compose_coordinates(x, y)
+      self.assertEqual(coordax.get_coordinate_part(field, xy), xy)
+
+    with self.subTest('dims_not_in_inputs_raises'):
       with self.assertRaisesRegex(ValueError, 'is not a part of'):
         coordax.get_coordinate_part(field, 'z')
 
-    with self.subTest('coordinate_not_in_inputs'):
+    with self.subTest('coordinate_not_in_inputs_raises'):
       z = coordax.SizedAxis('z', 4)
       field = coordax.field(jnp.zeros((4, 3)), 'z', 'y')  # dummy 'z' != z.
       with self.assertRaisesRegex(ValueError, 'is not a part of'):

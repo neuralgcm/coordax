@@ -170,6 +170,19 @@ def is_coord(obj: Any) -> TypeGuard[Coordinate]:
   return isinstance(obj, Coordinate)
 
 
+def contains_dims(
+    coord: Coordinate,
+    *dims: str | Coordinate,
+) -> bool:
+  """Returns True if coordinate contains the given dimensions or coordinates."""
+  dim_names = filter(lambda x: isinstance(x, str), dims)
+  dim_coords = filter(is_coord, dims)
+  dim_axes = _concat_tuples((c.axes for c in dim_coords))  # pytype: disable=attribute-error
+  contain_names = set(dim_names).issubset(coord.dims)
+  contain_coords = set(dim_axes).issubset(coord.axes)
+  return contain_names and contain_coords
+
+
 @utils.export
 @jax.tree_util.register_static
 @dataclasses.dataclass(frozen=True)

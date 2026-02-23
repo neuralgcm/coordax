@@ -1188,27 +1188,17 @@ def get_coordinate(
 @utils.export
 def contains_dims(
     field_or_coord: Field | Coordinate,
-    dims: str | Sequence[str] | Coordinate,
+    *dims: str | Coordinate,
 ) -> bool:
   """Returns True if the field or coordinate contains the given dimensions."""
-  if isinstance(dims, str):
-    dims = (dims,)
-
-  if isinstance(dims, Sequence):
-    return set(dims).issubset(field_or_coord.dims)
-
-  if coordinate_systems.is_coord(dims):
-    inputs = field_or_coord
-    coordinate = inputs.coordinate if is_field(inputs) else inputs
-    return set(dims.axes).issubset(coordinate.axes)
-
-  raise TypeError(f'Invalid type for dims: {type(dims)}')
+  c = field_or_coord.coordinate if is_field(field_or_coord) else field_or_coord
+  return coordinate_systems.contains_dims(c, *dims)
 
 
 @utils.export
 def get_coordinate_part(
     field_or_coord: Field | Coordinate,
-    dims: str | Sequence[str] | Coordinate,
+    *dims: str | Coordinate,
 ) -> Coordinate:
   # fmt: off
   """Returns a coordinate object associated with the given dimensions.
@@ -1221,7 +1211,7 @@ def get_coordinate_part(
 
   Args:
     field_or_coord: coordax.Field or coordax.Coordinate to extract part from.
-    dims: specification of the coordinate part to extract.
+    *dims: specification of the coordinate part to extract.
 
   Returns:
     Coordinate corresponding to `dims` in `field_or_coord`.
@@ -1241,18 +1231,14 @@ def get_coordinate_part(
     coordax.DummyAxis('y', size=3)
   """
   # fmt: on
-  if not contains_dims(field_or_coord, dims):
+  if not contains_dims(field_or_coord, *dims):
     raise ValueError(f'{dims=} is not a part of {field_or_coord=}.')
 
-  if coordinate_systems.is_coord(dims):
-    return dims  # contains_dims already checked that `dims` is in inputs.
-
-  inputs = field_or_coord
-  coordinate = inputs.coordinate if is_field(inputs) else inputs
-  if isinstance(dims, str):
-    dims = (dims,)
-  axes_by_dim = {d: ax for d, ax in zip(coordinate.dims, coordinate.axes)}
-  return coordinate_systems.compose(*[axes_by_dim[d] for d in dims])
+  c = field_or_coord.coordinate if is_field(field_or_coord) else field_or_coord
+  dim_to_axes = {d: ax for d, ax in zip(c.dims, c.axes)}
+  return coordinate_systems.compose(*[
+      d if coordinate_systems.is_coord(d) else dim_to_axes[d] for d in dims
+  ])
 
 
 PyTree = Any
