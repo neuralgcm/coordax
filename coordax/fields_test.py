@@ -27,6 +27,7 @@ from coordax import testing
 import jax
 import jax.numpy as jnp
 import numpy as np
+import pytest
 
 
 class FieldTest(parameterized.TestCase):
@@ -135,7 +136,7 @@ class FieldTest(parameterized.TestCase):
   def test_field_coordinate_property(self):
     x = coordax.LabeledAxis('x', np.arange(2))
     field = coordax.field(np.zeros((2, 3)), x, 'y')
-    expected_coord = coordax.compose_coordinates(x, coordax.DummyAxis('y', 3))
+    expected_coord = coordax.coords.compose(x, coordax.DummyAxis('y', 3))
     self.assertEqual(field.coordinate, expected_coord)
 
   def test_field_treedef_independent_of_tag_order(self):
@@ -215,13 +216,13 @@ class FieldTest(parameterized.TestCase):
           testcase_name='product_coord_&_product_coord',
           array=np.arange(2 * 3).reshape((2, 3)),
           tags=(
-              coordax.compose_coordinates(
+              coordax.coords.compose(
                   coordax.SizedAxis('x', 2),
                   coordax.SizedAxis('y', 3),
               ),
           ),
           untags=(
-              coordax.compose_coordinates(
+              coordax.coords.compose(
                   coordax.SizedAxis('x', 2),
                   coordax.SizedAxis('y', 3),
               ),
@@ -232,7 +233,7 @@ class FieldTest(parameterized.TestCase):
           testcase_name='product_coord_&_names',
           array=np.arange(2 * 3).reshape((2, 3)),
           tags=(
-              coordax.compose_coordinates(
+              coordax.coords.compose(
                   coordax.SizedAxis('x', 2),
                   coordax.SizedAxis('y', 3),
               ),
@@ -317,7 +318,7 @@ class FieldTest(parameterized.TestCase):
     x = coordax.LabeledAxis('x', np.linspace(0, 1, 4))
     y = coordax.LabeledAxis('y', np.linspace(5, 10, 5))
     z = coordax.LabeledAxis('z', np.linspace(0, np.pi, 7))
-    yxz = coordax.compose_coordinates(y, x, z)
+    yxz = coordax.coords.compose(y, x, z)
     field = coordax.field(np.arange(4), x)
     other = coordax.field(np.ones((5, 4, 7)), yxz)
     expected_data = np.tile(np.arange(4)[np.newaxis, :, np.newaxis], (5, 1, 7))
@@ -339,7 +340,7 @@ class FieldTest(parameterized.TestCase):
         re.escape(
             'cannot broadcast field because axes corresponding to dimension '
             f"'x' do not match: {x} vs {x_mismatch}"
-        )
+        ),
     ):
       field.broadcast_like(other)
 
@@ -347,7 +348,7 @@ class FieldTest(parameterized.TestCase):
     x, y = coordax.SizedAxis('x', 4), coordax.SizedAxis('y', 5)
     z = coordax.LabeledAxis('z', np.linspace(0, np.pi, 7))
     field = coordax.field(np.arange(4), x)
-    yxz = coordax.compose_coordinates(y, x, z)
+    yxz = coordax.coords.compose(y, x, z)
     expected_data = np.tile(np.arange(4)[np.newaxis, :, np.newaxis], (5, 1, 7))
     actual = field.broadcast_like(yxz)
     expected = coordax.field(expected_data, yxz)
@@ -678,20 +679,16 @@ class FieldTest(parameterized.TestCase):
 
     x = coordax.LabeledAxis('x', np.array([np.e, np.pi]))
     y = coordax.LabeledAxis('y', np.linspace(0, 1, 2))
-    other = coordax.field(
-        Duck(a=jnp.zeros((2, 2)), b=jnp.zeros((2, 2))), x, y
-    )
+    other = coordax.field(Duck(a=jnp.zeros((2, 2)), b=jnp.zeros((2, 2))), x, y)
     actual = field.tag(x).broadcast_like(other)
     expected = coordax.field(
-        Duck(a=jnp.array([[1, 1], [2, 2]]), b=jnp.array([[3, 3], [4, 4]])),
-        x, y
+        Duck(a=jnp.array([[1, 1], [2, 2]]), b=jnp.array([[3, 3], [4, 4]])), x, y
     )
     testing.assert_fields_equal(actual, expected)
 
     actual = field.tag(y).broadcast_like(other)
     expected = coordax.field(
-        Duck(a=jnp.array([[1, 2], [1, 2]]), b=jnp.array([[3, 4], [3, 4]])),
-        x, y
+        Duck(a=jnp.array([[1, 2], [1, 2]]), b=jnp.array([[3, 4], [3, 4]])), x, y
     )
     testing.assert_fields_equal(actual, expected)
 
@@ -707,6 +704,7 @@ class FieldTest(parameterized.TestCase):
         leaves = [x.a if isinstance(x, NonPytree) else x for x in leaves]
         args = jax.tree.unflatten(argdef, leaves)
         return jax.vmap(fun, in_axes, out_axes, **kwargs)(*args)
+
       return mapped_fun
 
     def foo(x, y):
@@ -733,21 +731,21 @@ class FieldTest(parameterized.TestCase):
     )
     with self.subTest('default'):
       actual = coordax.get_coordinate(field)
-      expected = coordax.compose_coordinates(
+      expected = coordax.coords.compose(
           *[axes[d] for d in ['x', 'y', 'z']]
       )
       self.assertEqual(actual, expected)
 
     with self.subTest('with_positional_dims'):
       actual = coordax.get_coordinate(field.untag('y'))
-      expected = coordax.compose_coordinates(
+      expected = coordax.coords.compose(
           axes['x'], coordax.DummyAxis(None, 3), axes['z']
       )
       self.assertEqual(actual, expected)
 
     with self.subTest('with_name_only_dims'):
       actual = coordax.get_coordinate(field.untag('y', 'z').tag('g', 'h'))
-      expected = coordax.compose_coordinates(
+      expected = coordax.coords.compose(
           axes['x'],
           coordax.DummyAxis('g', 3),
           coordax.DummyAxis('h', 4),
@@ -797,9 +795,7 @@ class FieldTest(parameterized.TestCase):
       f1_c = coordax.field(jnp.zeros((2,)), x_axis)
       tree_c = {'a': f1_c, 'b': f2}
       untagged_c = coordax.untag(tree_c, x_axis, allow_missing=True)
-      testing.assert_fields_equal(
-          untagged_c['a'], f1_c.untag(x_axis)
-      )
+      testing.assert_fields_equal(untagged_c['a'], f1_c.untag(x_axis))
       testing.assert_fields_equal(untagged_c['b'], f2)
 
   def test_contains_dims(self):
@@ -838,7 +834,7 @@ class FieldTest(parameterized.TestCase):
       self.assertEqual(coordax.get_coordinate_part(field, x), x)
 
     with self.subTest('by_composite_coordinate'):
-      xy = coordax.compose_coordinates(x, y)
+      xy = coordax.coords.compose(x, y)
       self.assertEqual(coordax.get_coordinate_part(field, xy), xy)
 
     with self.subTest('dims_not_in_inputs_raises'):
@@ -850,6 +846,183 @@ class FieldTest(parameterized.TestCase):
       field = coordax.field(jnp.zeros((4, 3)), 'z', 'y')  # dummy 'z' != z.
       with self.assertRaisesRegex(ValueError, 'is not a part of'):
         coordax.get_coordinate_part(field, z)
+
+  def test_isel(self):
+    y = coordax.SizedAxis('y', 3)
+    data = jnp.arange(6).reshape(2, 3)
+    field = coordax.field(data, 'x', y)
+
+    with self.subTest('single_value'):
+      f_x0 = field.isel(x=0)
+      self.assertEqual(f_x0.dims, ('y',))
+      self.assertEqual(f_x0.shape, (3,))
+      np.testing.assert_array_equal(f_x0.data, data[0])
+
+    with self.subTest('negative_indices'):
+      f_xm2 = field.isel(x=-2)
+      self.assertEqual(f_xm2.dims, ('y',))
+      self.assertEqual(f_xm2.shape, (3,))
+      np.testing.assert_array_equal(f_xm2.data, data[-2])
+
+    with self.subTest('slice_one_axis'):
+      f_slice = field.isel(y=slice(0, 2))
+      self.assertEqual(f_slice.dims, ('x', 'y'))
+      self.assertEqual(f_slice.shape, (2, 2))
+      np.testing.assert_array_equal(f_slice.data, data[:, 0:2])
+
+    with self.subTest('multiple_axes'):
+      f_mixed = field.isel(x=1, y=slice(3, 0, -1))  # reverse slice.
+      self.assertEqual(f_mixed.dims, ('y',))
+      self.assertEqual(f_mixed.shape, (2,))
+      np.testing.assert_array_equal(f_mixed.data, data[1, 1:3][::-1])
+
+    with self.subTest('axis_as_key'):
+      f_axis = field.isel({y: slice(0, 2)})
+      self.assertEqual(f_axis.dims, ('x', 'y'))
+      self.assertEqual(f_axis.shape, (2, 2))
+      np.testing.assert_array_equal(f_axis.data, data[:, 0:2])
+
+  def test_isel_raises_on_unknown_dim(self):
+    field = coordax.field(jnp.zeros((2, 3)), 'x', 'y')
+    with self.assertRaisesRegex(ValueError, 'Dimension .* not found in field'):
+      field.isel(z=0)
+
+  def test_sel(self):
+    data = jnp.arange(6).reshape(2, 3)
+    x = coordax.LabeledAxis('x', np.array([10, 20]))
+    y = coordax.LabeledAxis('y', np.array([100, 200, 300]))
+    field = coordax.Field(data, dims=('x', 'y'), axes={'x': x, 'y': y})
+
+    with self.subTest('exact_value'):
+      f_val = field.sel(x=20)
+      self.assertEqual(f_val.dims, ('y',))
+      np.testing.assert_array_equal(f_val.data, data[1])
+      self.assertEqual(f_val.axes['y'], y)
+    with self.subTest('nearest_match'):
+      f_val = field.sel(x=90, method='nearest')  # 20 is the nearest value.
+      self.assertEqual(f_val.dims, ('y',))
+      np.testing.assert_array_equal(f_val.data, data[1])
+      self.assertEqual(f_val.axes['y'], y)
+    with self.subTest('nearest_match_multiple'):
+      f_val = field.sel(y=[105, 290], method='nearest')  # 100, 300
+      self.assertEqual(f_val.dims, ('x', 'y'))
+      np.testing.assert_array_equal(f_val.data, data[:, [0, 2]])
+      expected_new_y = coordax.LabeledAxis('y', np.array([100, 300]))
+      self.assertEqual(f_val.axes['y'], expected_new_y)
+    with self.subTest('slice'):
+      f_slice = field.sel(y=slice(100, 200))
+      self.assertEqual(f_slice.dims, ('x', 'y'))
+      self.assertEqual(f_slice.shape, (2, 2))
+      np.testing.assert_array_equal(f_slice.data, data[:, 0:2])
+      expected_y_ticks = np.array([100, 200])
+      np.testing.assert_array_equal(f_slice.axes['y'].ticks, expected_y_ticks)
+    with self.subTest('using_axes'):
+      y_sel = coordax.LabeledAxis('y', np.array([100, 200]))
+      f_axis = field.sel({y: y_sel})
+      self.assertEqual(f_axis.dims, ('x', 'y'))
+      np.testing.assert_array_equal(f_axis.data, data[:, :2])
+      self.assertEqual(f_axis.axes['y'], y_sel)
+    with self.subTest('repeated_indices'):
+      f_sel = field.sel({y: [100, 100]})
+      self.assertEqual(f_sel.dims, ('x', 'y'))
+      np.testing.assert_array_equal(f_sel.data, data[:, [0, 0]])
+      expected_y_ticks = np.array([100, 100])
+      np.testing.assert_array_equal(f_sel.axes['y'].ticks, expected_y_ticks)
+    with self.subTest('preserves_sel_order'):
+      f_sel = field.sel({y: [200, 100]})
+      self.assertEqual(f_sel.dims, ('x', 'y'))
+      np.testing.assert_array_equal(f_sel.data, data[:, [1, 0]])
+      expected_y_ticks = np.array([200, 100])
+      np.testing.assert_array_equal(f_sel.axes['y'].ticks, expected_y_ticks)
+
+  def test_sel_raises_on_unused_indexer(self):
+    x = coordax.LabeledAxis('x', np.array([10, 20]))
+    y = coordax.LabeledAxis('y', np.array([100, 200, 300]))
+    field = coordax.field(jnp.zeros((2, 3)), x, y)
+    with self.assertRaisesRegex(
+        ValueError,
+        re.escape("Indexers {'z'} were not processed")
+    ):
+      field.sel(z=slice(0, 20), x=10)
+
+  def test_isel_matches_xarray(self):
+    pytest.importorskip('xarray')
+    rng = np.random.RandomState(seed=0)
+    data = rng.randn(2, 3, 4)
+    x = coordax.LabeledAxis('x', np.arange(2))
+    y = coordax.LabeledAxis('y', np.arange(3))
+    z = coordax.LabeledAxis('z', np.arange(4))
+
+    field = coordax.field(data, x, y, z)
+    da = field.to_xarray()
+
+    with self.subTest('with_indices'):
+      isel_args = {'x': 0, 'y': 2}
+      actual = field.isel(isel_args)
+      expected = coordax.from_xarray(da.isel(isel_args))
+      testing.assert_fields_equal(actual, expected)
+    with self.subTest('with_mixed_indexers'):
+      isel_args = {'x': 0, 'y': slice(1, 2), 'z': 0}
+      actual = field.isel(isel_args)
+      expected = coordax.from_xarray(da.isel(isel_args))
+      testing.assert_fields_equal(actual, expected)
+    with self.subTest('with_repeated_and_unordered_indices'):
+      isel_args = {'x': -1, 'y': [1, 0], 'z': [1, 1, 2]}
+      actual = field.isel(isel_args)
+      expected = coordax.from_xarray(da.isel(isel_args))
+      testing.assert_fields_equal(actual, expected)
+
+  def test_sel_same_as_xarray(self):
+    pytest.importorskip('xarray')
+    data = np.arange(20).reshape(2, 10)
+    x = coordax.LabeledAxis('x', np.arange(2))
+    y = coordax.LabeledAxis('y', np.arange(10))
+
+    field = coordax.field(data, x, y)
+    da = field.to_xarray()
+
+    with self.subTest('with_indices'):
+      sel_args = {'y': 8, 'x': 0}
+      actual = field.sel(sel_args)
+      expected = coordax.from_xarray(da.sel(sel_args))
+      testing.assert_fields_equal(actual, expected)
+
+    with self.subTest('with_multiple_indices'):
+      sel_args = {'y': [0, 4, 6, 8], 'x': 0}
+      actual = field.sel(sel_args)
+      expected = coordax.from_xarray(da.sel(sel_args))
+      testing.assert_fields_equal(actual, expected)
+
+    with self.subTest('with_slice'):
+      isel_args = {'x': 0, 'y': slice(1, 2)}
+      actual = field.isel(isel_args)
+      expected = coordax.from_xarray(da.isel(isel_args))
+      testing.assert_fields_equal(actual, expected)
+
+    with self.subTest('with_unique_nearest_match'):
+      sel_args = {'x': 0, 'y': [1.2, 5.05]}
+      actual = field.sel(sel_args, method='nearest')
+      expected = coordax.from_xarray(da.sel(sel_args, method='nearest'))
+      testing.assert_fields_equal(actual, expected)
+
+    with self.subTest('with_non_unique_nearest_match'):
+      sel_args = {'y': [1.2, 1.4]}
+      actual = field.sel(sel_args, method='nearest')
+      expected = coordax.from_xarray(da.sel(sel_args, method='nearest'))
+      testing.assert_fields_equal(actual, expected)
+
+  def test_isel_preserves_positional_shape(self):
+    data = jnp.zeros((2, 3, 4))
+    field = coordax.field(data, 'x', None, 'y')
+    # x: 0, None: 1, y: 2
+
+    f_sel = field.isel(x=0)
+    self.assertEqual(f_sel.dims, (None, 'y'))
+    self.assertEqual(f_sel.shape, (3, 4))
+
+    f_sel_y = field.isel(y=slice(0, 2))
+    self.assertEqual(f_sel_y.dims, ('x', None, 'y'))
+    self.assertEqual(f_sel_y.shape, (2, 3, 2))
 
   def test_deprecated_tmp_axis_name(self):
     with self.assertWarnsRegex(

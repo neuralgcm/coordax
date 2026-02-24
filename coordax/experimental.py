@@ -16,6 +16,10 @@
 # Note: import <name> as <name> is required for names to be exported.
 # See PEP 484 & https://github.com/jax-ml/jax/issues/7570
 # pylint: disable=g-multiple-import,useless-import-alias,g-importing-member,unused-import
+from coordax.coordinate_systems import (
+    map_indexers_using_ticks as map_indexers_using_ticks,
+    SelMethod as SelMethod,
+)
 from coordax.ndarrays import (
     NDArray as NDArray,
     register_ndarray as register_ndarray,
