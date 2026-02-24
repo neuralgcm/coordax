@@ -17,6 +17,7 @@
 Named dimensions of a ``Field`` are associated with coordinates that describe
 their discretization.
 """
+
 from __future__ import annotations
 
 import collections
@@ -41,6 +42,7 @@ if TYPE_CHECKING:
   import xarray
 
 
+# pylint: disable=redefined-outer-name
 Pytree: TypeAlias = Any
 Sequence = collections.abc.Sequence
 
@@ -876,6 +878,147 @@ class Field:
         self.named_array.broadcast_like(other.named_array), other.axes
     )
 
+  def isel(
+      self,
+      indexers: dict[str | Coordinate, Any] | None = None,
+      **indexers_kwargs,
+  ) -> Field:
+    """Returns a new Field with the given indexers applied.
+
+    Note: This is an experimental feature, and may be changed or completely
+    removed in the future.
+
+    ``isel`` mimics the behavior of ``xarray.DataArray.isel`` and expects
+    integer, slice, or array-like objects with integer or slice values. All keys
+    provided to `isel` are expected to be present in `self.dims`. For
+    label-based selection, use ``sel`` instead.
+
+    Note: ``isel`` might not be supported for some coordinate types or result in
+    outputs where coordinate components have different type than that of the
+    original field. This is a reflection of the limitations of the associated
+    coordinate class.
+
+    Args:
+      indexers: A mapping from dimensions to indices, slices, or arrays.
+      **indexers_kwargs: The keyword arguments form of ``indexers``.
+
+    Returns:
+      A new Field with the selection applied.
+
+    Examples:
+      >>> import coordax as cx
+      >>> import jax.numpy as jnp
+      >>> field = cx.field(jnp.arange(6).reshape(2, 3), 'x', 'y')
+      >>> field.isel(x=0)
+      <Field dims=('y',) shape=(3,) axes={} >
+      >>> field.isel(y=slice(0, 2))
+      <Field dims=('x', 'y') shape=(2, 2) axes={} >
+      >>> field.isel(x=[0, 1])
+      <Field dims=('x', 'y') shape=(2, 3) axes={} >
+    """
+    indexers = coordinate_systems.normalize_indexers(
+        indexers, **indexers_kwargs
+    )
+    if not indexers:
+      return self
+
+    for dim in indexers:
+      if coordinate_systems.is_coord(dim):
+        if dim not in self.coordinate.axes:
+          raise ValueError(
+              f'Dimension {dim!r} not found in field with {self.coordinate=}'
+          )
+      else:
+        if dim not in self.named_axes:
+          raise ValueError(
+              f'Dimension {dim!r} not found in field with {self.dims=}'
+          )
+
+    dim_names = _dimension_names(*indexers.keys())
+    f = self
+    n_positional = len(f.positional_shape)
+    tmp_axes = []
+    if n_positional > 0:
+      tmp_axes.append(new_axis_name(f))
+      f = f.tag(tmp_axes[-1])
+
+    for dim, indexer in zip(dim_names, indexers.values(), strict=True):
+      post_slice_coord = f.coordinate.isel({dim: indexer})
+      data_slice = [slice(None)] * f.ndim
+      data_slice[f.named_axes[dim]] = indexer
+      f = field(f.data[tuple(data_slice)], post_slice_coord)
+    return f.untag(*tmp_axes)
+
+  def sel(
+      self,
+      indexers: dict[str | Coordinate, Any] | None = None,
+      method: Literal['nearest'] | None = None,
+      **indexers_kwargs,
+  ) -> Field:
+    """Returns a new Field with the given selection applied.
+
+    Note: This is an experimental feature, and may be changed or completely
+    removed in the future.
+
+     ``sel`` mimics the behavior of ``xarray.DataArray.sel`` and expects
+    label values. The selection mechanics is delegated to the underlying
+    coordinate, via mapping to integer-based indexers, slicing and retagging
+    with the appropriate coordinate.
+
+    Note: ``sel`` might not be supported for some coordinate types or result in
+    outputs where coordinate components have different type than that of the
+    original field. This is a reflection of the limitations of the associated
+    coordinate class.
+
+    Args:
+      indexers: A mapping from dimension names to values or slices.
+      method: Optional method to use for inexact matches. Cannot be used when
+        ``indexers` contain slices. Default is `None`.
+      **indexers_kwargs: The keyword arguments form of ``indexers``.
+
+    Returns:
+      A new Field with the selection applied.
+
+    Examples:
+      >>> import coordax as cx
+      >>> import jax.numpy as jnp
+      >>> import numpy as np
+      >>> x = cx.LabeledAxis('x', np.array([10, 20]))
+      >>> field = cx.field(jnp.arange(6).reshape(2, 3), x, 'y')
+      >>> field.sel(x=20)
+      <Field dims=('y',) shape=(3,) axes={} >
+      >>> field.sel(x=slice(10, 20))
+      <Field dims=('x', 'y') shape=(2, 3) axes={'x': LabeledAxis} >
+    """
+    sel_indexers = coordinate_systems.normalize_indexers(
+        indexers, **indexers_kwargs
+    )
+    if not sel_indexers:
+      return self
+
+    unpacked_indexers, unpacked_c = (
+        coordinate_systems.unpack_and_validate_indexers(sel_indexers)
+    )
+    mapped_indexers, consumed = self.coordinate.map_indexers(
+        unpacked_indexers, method=method
+    )
+
+    final_consumed = set()
+    for c in consumed:
+      if c in unpacked_c:
+        final_consumed.add(unpacked_c[c])
+      else:
+        final_consumed.add(c)
+
+    unused_sel_indexers = set(sel_indexers.keys()) - final_consumed
+    if unused_sel_indexers:
+      raise ValueError(
+          f'Indexers {unused_sel_indexers} were not processed by any of the '
+          f'coordinates in {self.coordinate}'
+      )
+
+    return self.isel(mapped_indexers)
+
   def __repr__(self):
     if _in_treescope_abbreviation_mode():
       return treescope.render_to_text(self)
@@ -1236,9 +1379,9 @@ def get_coordinate_part(
 
   c = field_or_coord.coordinate if is_field(field_or_coord) else field_or_coord
   dim_to_axes = {d: ax for d, ax in zip(c.dims, c.axes)}
-  return coordinate_systems.compose(*[
-      d if coordinate_systems.is_coord(d) else dim_to_axes[d] for d in dims
-  ])
+  return coordinate_systems.compose(
+      *[d if coordinate_systems.is_coord(d) else dim_to_axes[d] for d in dims]
+  )
 
 
 PyTree = Any
@@ -1300,10 +1443,12 @@ def untag(
     :meth:`coordax.Field.untag`
   """
   if allow_missing:
+
     def untag_fn(x):
       if not is_field(x) or not any([contains_dims(x, d) for d in dims]):
         return x
       return x.untag(*[d for d in dims if contains_dims(x, d)])
+
   else:
     untag_fn = lambda x: x.untag(*dims) if is_field(x) else x
   return jax.tree.map(untag_fn, tree, is_leaf=is_field)
