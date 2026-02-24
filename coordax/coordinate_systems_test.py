@@ -480,6 +480,176 @@ class CoordinateSystemsTest(parameterized.TestCase):
     with self.assertRaisesRegex(ValueError, 'Expected exactly one instance'):
       cx.coords.extract(x, cx.LabeledAxis)
 
+  def test_isel_sized_axis(self):
+    axis = cx.SizedAxis('x', 5)
+    with self.subTest('integer_indexing'):
+      self.assertEqual(axis.isel({'x': 0}), cx.Scalar())
+    with self.subTest('slice_indexing'):
+      self.assertEqual(axis.isel({'x': slice(1, 4)}), cx.SizedAxis('x', 3))
+    with self.subTest('none_slice'):
+      sliced = axis.isel(x=slice(None))
+      self.assertEqual(sliced, axis)
+    with self.subTest('array_indexing'):
+      self.assertEqual(axis.isel({'x': [0, 2, 4]}), cx.SizedAxis('x', 3))
+    with self.subTest('array_indexing_kwargs'):
+      self.assertEqual(axis.isel(x=[2, 4]), cx.SizedAxis('x', 2))
+    with self.subTest('slice_out_of_bounds'):  # xarray semantics.
+      self.assertEqual(axis.isel(x=slice(3, 10)), cx.SizedAxis('x', 2))
+    with self.subTest('axis_as_key'):
+      self.assertEqual(axis.isel({axis: 0}), cx.Scalar())
+
+  def test_isel_labeled_axis(self):
+    axis = cx.LabeledAxis('x', np.arange(5))
+    with self.subTest('integer_indexing'):
+      self.assertEqual(axis.isel(x=0), cx.Scalar())
+    with self.subTest('slice_indexing'):
+      sliced = axis.isel(x=slice(1, 4))
+      expected = cx.LabeledAxis('x', np.arange(1, 4))
+      self.assertEqual(sliced, expected)
+    with self.subTest('none_slice'):
+      sliced = axis.isel(x=slice(None))
+      self.assertEqual(sliced, axis)
+    with self.subTest('array_indexing'):
+      sliced = axis.isel(x=[0, 2, 4])
+      expected = cx.LabeledAxis('x', np.array([0, 2, 4]))
+      self.assertEqual(sliced, expected)
+    with self.subTest('axis_as_key'):
+      sliced = axis.isel({axis: [0, 1]})
+      expected = cx.LabeledAxis('x', np.array([0, 1]))
+      self.assertEqual(sliced, expected)
+    with self.subTest('supports_repeated_indices'):
+      sliced = axis.isel({axis: [0, 0]})
+      expected = cx.LabeledAxis('x', np.array([0, 0]))
+      self.assertEqual(sliced, expected)
+
+  def test_isel_unknown_dim_raises(self):
+    x = cx.SizedAxis('x', 2)
+    with self.assertRaisesRegex(ValueError, 'Dimensions .* do not exist'):
+      x.isel({'y': 0})
+    with self.subTest('for_scalar'):
+      with self.assertRaisesRegex(ValueError, 'Dimensions .* do not exist'):
+        cx.Scalar().isel({'x': 0})
+
+  def test_sel_labeled_axis(self):
+    axis = cx.LabeledAxis('x', np.array([10, 20, 30, 40, 50]))
+    with self.subTest('exact_match'):
+      self.assertEqual(axis.sel({'x': 20}), cx.Scalar())
+    with self.subTest('slice_match'):
+      # xarray semantics: [10, 40] -> 10, 20, 30, 40
+      sel_slice = axis.sel({'x': slice(10, 40)})
+      expected = cx.LabeledAxis('x', np.array([10, 20, 30, 40]))
+      self.assertEqual(sel_slice, expected)
+    with self.subTest('multiple_matches'):
+      sel_values = axis.sel({'x': [10, 40]})
+      expected = cx.LabeledAxis('x', np.array([10, 40]))
+      self.assertEqual(sel_values, expected)
+    with self.subTest('nearest_match'):
+      sel_nearest = axis.sel({'x': 22}, method='nearest')
+      self.assertEqual(sel_nearest, cx.Scalar())
+    with self.subTest('nearest_match_sequence'):
+      sel_nearest = axis.sel({'x': [22, 29]}, method='nearest')
+      self.assertEqual(sel_nearest, cx.LabeledAxis('x', np.array([20, 30])))
+    with self.subTest('nearest_match_sequence_same_index'):
+      sel_nearest = axis.sel({'x': [22, 23]}, method='nearest')
+      self.assertEqual(sel_nearest, cx.LabeledAxis('x', np.array([20, 20])))
+    with self.subTest('nearest_match_unsorted'):
+      axis_unsorted = cx.LabeledAxis('x', np.array([30, 10, 50, 20, 40]))
+      sel_nearest = axis_unsorted.sel({'x': [22, 31]}, method='nearest')
+      self.assertEqual(sel_nearest, cx.LabeledAxis('x', np.array([20, 30])))
+    with self.subTest('preserves_sel_order_ordered_ticks'):
+      sel_ordered = axis.sel({'x': [40, 20]})
+      expected = cx.LabeledAxis('x', np.array([40, 20]))
+      self.assertEqual(sel_ordered, expected)
+    with self.subTest('preserves_sel_order_unsorted_ticks'):
+      axis_unsorted = cx.LabeledAxis('x', np.array([30, 10, 50, 20, 40]))
+      sel_ordered = axis_unsorted.sel({'x': [40, 20]})
+      expected = cx.LabeledAxis('x', np.array([40, 20]))
+      self.assertEqual(sel_ordered, expected)
+    with self.subTest('supports_repeated_labels'):
+      sel_repeated = axis.sel({'x': [20, 20]})
+      expected = cx.LabeledAxis('x', np.array([20, 20]))
+      self.assertEqual(sel_repeated, expected)
+
+  def test_sel_labeled_axis_raises_on_no_match(self):
+    axis = cx.LabeledAxis('x', np.array([-1, 2, 3]))
+    with self.subTest('value_not_found'):
+      with self.assertRaises(KeyError):
+        axis.sel({'x': 0})
+    with self.subTest('not_all_values_found'):
+      with self.assertRaisesRegex(KeyError, 'Not all values in .* were found'):
+        axis.sel({'x': [2, 2.5, 3]})
+
+  def test_sel_labeled_axis_raises_on_slice_with_step(self):
+    axis = cx.LabeledAxis('x', np.arange(10))
+    with self.assertRaisesRegex(
+        ValueError,
+        "Indexer for k='x' uses slice with v.step=2 != None, which is not"
+        ' supported.',
+    ):
+      axis.sel({'x': slice(0, 5, 2)})
+
+  def test_isel_composed(self):
+    x, y = cx.SizedAxis('x', 3), cx.SizedAxis('y', 4)
+    xy = cx.coords.compose(x, y)
+    with self.subTest('index_one_axis'):
+      self.assertEqual(xy.isel(x=0), y)
+    with self.subTest('slice_one_axis'):
+      expected = cx.coords.compose(x, cx.SizedAxis('y', 2))
+      self.assertEqual(xy.isel(y=slice(0, 2)), expected)
+    with self.subTest('index_both'):
+      self.assertEqual(xy.isel(x=0, y=1), cx.Scalar())
+    with self.subTest('index_using_axis'):
+      expected = cx.coords.compose(cx.SizedAxis('x', 1), y)
+      self.assertEqual(xy.isel({x: slice(0, 1)}), expected)
+    with self.subTest('none_slice'):
+      sliced = xy.isel(x=slice(None))
+      self.assertEqual(sliced, xy)
+
+  def test_sel_composed(self):
+    x = cx.SizedAxis('x', 2)
+    y = cx.LabeledAxis('y', np.array([10, 20, 30]))
+    coord = cx.coords.compose(x, y)
+
+    with self.subTest('single_value'):
+      # SizedAxis 'x' ignored (no sel support), LabeledAxis 'y' selected.
+      selected = coord.sel(y=20)
+      # x remains, y becomes scalar (dropped from composition) -> x
+      self.assertEqual(selected, x)
+
+    with self.subTest('slice'):
+      selected = coord.sel(y=slice(10, 20))
+      expected_y = cx.LabeledAxis('y', np.array([10, 20]))
+      expected = cx.coords.compose(x, expected_y)
+      self.assertEqual(selected, expected)
+
+    with self.subTest('axis_as_key'):
+      selected = coord.sel({y: 20})
+      self.assertEqual(selected, x)
+
+    with self.subTest('axis_as_value'):
+      target_y = cx.LabeledAxis('y', np.array([10, 20]))
+      selected = coord.sel(y=target_y)
+      expected = cx.coords.compose(x, target_y)
+      self.assertEqual(selected, expected)
+
+    with self.subTest('none_slice'):
+      selected = coord.sel(y=slice(None))
+      self.assertEqual(selected, coord)
+
+    z = cx.LabeledAxis('z', np.linspace(0, np.pi, 10))
+    xyz = cx.coords.compose(x, y, z)
+    with self.subTest('multidim_axis_as_value'):
+      sub_y = cx.LabeledAxis('y', np.array([10, 20]))
+      sub_z = cx.LabeledAxis('z', np.linspace(0, np.pi, 10)[::2])
+      yz = cx.coords.compose(y, z)
+      sub_yz = cx.coords.compose(sub_y, sub_z)
+      selected = xyz.sel({yz: sub_yz})
+      self.assertEqual(selected, cx.coords.compose(x, sub_y, sub_z))
+
+    with self.subTest('full_coordinate'):
+      selected = coord.sel({coord: coord})
+      self.assertEqual(selected, coord)
+
   def test_deprecated_aliases(self):
     with self.assertWarnsRegex(
         DeprecationWarning,
