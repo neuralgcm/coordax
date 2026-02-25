@@ -560,7 +560,9 @@ class Field:
               f'inconsistent coordinate fields for {name!r}:\n'
               f'{variable}\nvs\n{coords[name]}'
           )
-        coords[name] = variable
+        # We can only add coords in dims to form a valid xarray.DataArray.
+        if set(variable.dims).issubset(self.dims):
+          coords[name] = variable
 
     return xarray.DataArray(data=data, dims=self.dims, coords=coords)
 
