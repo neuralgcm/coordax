@@ -108,6 +108,53 @@ class XarrayTest(absltest.TestCase):
     )
     xarray.testing.assert_identical(actual, expected)
 
+  def test_field_to_data_array_custom_coord_selected_axis(self):
+    data = np.arange(2 * 2).reshape((2, 2))
+    custom_coord = AdhocCoordinate(
+        dims=('x', 'y'),
+        shape=(2, 3),
+        fields=lambda c: {
+            'custom': coordax.field(np.zeros(c.shape), c),
+            'x': coordax.field(np.ones(c.shape[0]), coordax.SelectedAxis(c, 0)),
+            'y': coordax.field(np.ones(c.shape[1]), coordax.SelectedAxis(c, 1)),
+        },
+    )
+    field = coordax.field(data, coordax.SelectedAxis(custom_coord, 0), 'z')
+    # Verify that coord_fields that are not in selected slice are excluded.
+    actual = field.to_xarray()
+    expected = xarray.DataArray(
+        data=np.arange(2 * 2).reshape((2, 2)),
+        dims=['x', 'z'],
+        coords={'x': (('x',), np.ones(2))},
+    )
+    xarray.testing.assert_identical(actual, expected)
+
+  def test_field_to_data_array_disjoint_slice_combine_fields(self):
+    data = np.arange(3 * 5 * 2).reshape((3, 5, 2))
+    custom_coord = AdhocCoordinate(
+        dims=('x', 'y'),
+        shape=(2, 3),
+        fields=lambda c: {
+            'custom': coordax.field(np.zeros(c.shape), c),
+            'x': coordax.field(np.ones(c.shape[0]), coordax.SelectedAxis(c, 0)),
+            'y': coordax.field(np.ones(c.shape[1]), coordax.SelectedAxis(c, 1)),
+        },
+    )
+    x, y = custom_coord.axes
+    field = coordax.field(data, y, coordax.SizedAxis('z', 5), x)
+    # Both slices presernt, so all coord_fields should be included.
+    actual = field.to_xarray()
+    expected = xarray.DataArray(
+        data=np.arange(3 * 5 * 2).reshape((3, 5, 2)),
+        dims=['y', 'z', 'x'],
+        coords={
+            'x': (('x',), np.ones(2)),
+            'y': (('y',), np.ones(3)),
+            'custom': (('x', 'y'), np.zeros((2, 3))),
+        },
+    )
+    xarray.testing.assert_identical(actual, expected)
+
   def test_field_to_data_array_missing_dimension_names(self):
     data = np.arange(2 * 3).reshape((2, 3))
     field = coordax.field(data)
@@ -240,7 +287,8 @@ class XarrayTest(absltest.TestCase):
     )
     with self.assertWarnsRegex(
         DeprecationWarning,
-        r'cx\.Field\.from_xarray\(\) is deprecated, use cx\.from_xarray\(\) instead',
+        r'cx\.Field\.from_xarray\(\) is deprecated, use cx\.from_xarray\(\)'
+        r' instead',
     ):
       actual = coordax.Field.from_xarray(data_array)
     expected = coordax.field(data, 'x', coordax.LabeledAxis('y', [1, 2, 3]))

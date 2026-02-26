@@ -465,7 +465,10 @@ class SelectedAxis(Coordinate):
   @property
   def fields(self) -> dict[str, 'fields.Field']:
     """A maps from field names to their values."""
-    return self.coordinate.fields
+    coord_fields = self.coordinate.fields
+    return {
+        k: v for k, v in coord_fields.items() if set(self.dims).issubset(v.dims)
+    }
 
   def __repr__(self):
     return f'coordax.SelectedAxis({self.coordinate!r}, axis={self.axis})'
@@ -618,7 +621,15 @@ class CartesianProduct(Coordinate):
   @property
   def fields(self) -> dict[str, 'fields.Field']:
     """Returns a mapping from field names to their values."""
-    return _merge_dicts(c.fields for c in self.coordinates)
+    # To extract all valid fields from multidimensional coordinates, we need to
+    # ensure that SelectedAxes are merged back into the original coordinates.
+    # To ensure that merging happens we reorder SelectedAxis by name and type.
+    selected = [x for x in self.coordinates if isinstance(x, SelectedAxis)]
+    key_by_class_and_axis = lambda x: (x.coordinate.__class__.__name__, x.axis)
+    ordered_selected = sorted(selected, key=key_by_class_and_axis)
+    non_selected = [x for x in self.coordinates if x not in selected]
+    reordered_canonized = canonicalize(*ordered_selected, *non_selected)
+    return _merge_dicts(c.fields for c in reordered_canonized)
 
   @property
   def axes(self) -> tuple[Coordinate, ...]:
