@@ -283,6 +283,30 @@ class FieldTest(parameterized.TestCase):
           full_unwrap=False,
           should_raise_on_untag=False,
       ),
+      dict(
+          testcase_name='composed_dummy_axis',
+          array=np.arange(4 * 5).reshape(4, 5),
+          tags=('x', 'y'),
+          untags=(
+              coordax.coords.compose(
+                  coordax.DummyAxis('x', 4), coordax.DummyAxis('y', 5)
+              ),
+          ),
+          full_unwrap=True,
+          should_raise_on_untag=False,
+      ),
+      dict(
+          testcase_name='composed_dummy_axis_missing',
+          array=np.arange(4 * 5).reshape(4, 5),
+          tags=('x', 'y'),
+          untags=(
+              coordax.coords.compose(
+                  coordax.DummyAxis('x', 4), coordax.DummyAxis('missing', 5)
+              ),
+          ),
+          full_unwrap=False,
+          should_raise_on_untag=True,
+      ),
   )
   def test_tag_then_untag_by(
       self,
@@ -731,9 +755,7 @@ class FieldTest(parameterized.TestCase):
     )
     with self.subTest('default'):
       actual = coordax.get_coordinate(field)
-      expected = coordax.coords.compose(
-          *[axes[d] for d in ['x', 'y', 'z']]
-      )
+      expected = coordax.coords.compose(*[axes[d] for d in ['x', 'y', 'z']])
       self.assertEqual(actual, expected)
 
     with self.subTest('with_positional_dims'):
@@ -952,8 +974,7 @@ class FieldTest(parameterized.TestCase):
     y = coordax.LabeledAxis('y', np.array([100, 200, 300]))
     field = coordax.field(jnp.zeros((2, 3)), x, y)
     with self.assertRaisesRegex(
-        ValueError,
-        re.escape("Indexers {'z'} were not processed")
+        ValueError, re.escape("Indexers {'z'} were not processed")
     ):
       field.sel(z=slice(0, 20), x=10)
 
