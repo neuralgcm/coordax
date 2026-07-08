@@ -829,11 +829,11 @@ def map_indexers_using_ticks(
   if axis not in indexers and dim not in indexers:
     return {}, set()
 
-  ticks = ticks if ticks is not None else axis.fields[dim].data
-  if np.unique(ticks).size != ticks.size:
+  ticks = ticks if ticks is not None else axis.fields[dim].data  # pyrefly: ignore[bad-assignment, bad-index]
+  if np.unique(ticks).size != ticks.size:  # pyrefly: ignore[missing-attribute, no-matching-overload]
     raise ValueError(f'Ticks must be unique, got {ticks}')
   if ticks_are_sorted is None:
-    ticks_are_sorted = np.all(ticks[:-1] < ticks[1:])
+    ticks_are_sorted = np.all(ticks[:-1] < ticks[1:])  # pyrefly: ignore[bad-assignment, unsupported-operation]
 
   key = axis if axis in indexers else dim
   assert isinstance(key, (str, Coordinate))  # make pytype happy
@@ -846,7 +846,7 @@ def map_indexers_using_ticks(
           'Indexing with axis requires same type and dims, got index axis'
           f' {value} for slicing {axis=}.'
       )
-    value = value.fields[dim].data
+    value = value.fields[dim].data  # pyrefly: ignore[bad-index]
 
   if isinstance(value, slice):
     if method is not None:
@@ -854,15 +854,15 @@ def map_indexers_using_ticks(
 
     start, stop = value.start, value.stop
     if ticks_are_sorted:
-      start_idx, stop_idx = 0, ticks.size
+      start_idx, stop_idx = 0, ticks.size  # pyrefly: ignore[missing-attribute]
       if start is not None:
-        start_idx = np.searchsorted(ticks, start, side='left')
+        start_idx = np.searchsorted(ticks, start, side='left')  # pyrefly: ignore[no-matching-overload]
       if stop is not None:
-        stop_idx = np.searchsorted(ticks, stop, side='right')
+        stop_idx = np.searchsorted(ticks, stop, side='right')  # pyrefly: ignore[no-matching-overload]
 
       return {key: slice(start_idx, stop_idx)}, {key}
     else:
-      mask = np.ones(ticks.size, dtype=bool)
+      mask = np.ones(ticks.size, dtype=bool)  # pyrefly: ignore[missing-attribute]
       if start is not None:
         mask &= ticks >= start
       if stop is not None:
@@ -871,17 +871,17 @@ def map_indexers_using_ticks(
 
   if method == 'nearest':
     if ticks_are_sorted:
-      candidates = np.searchsorted(ticks, value, side='left')
+      candidates = np.searchsorted(ticks, value, side='left')  # pyrefly: ignore[no-matching-overload]
       left = np.maximum(candidates - 1, 0)
-      right = np.minimum(candidates, len(ticks) - 1)
-      d_left = np.abs(value - ticks[left])
-      d_right = np.abs(value - ticks[right])
+      right = np.minimum(candidates, len(ticks) - 1)  # pyrefly: ignore[bad-argument-type]
+      d_left = np.abs(value - ticks[left])  # pyrefly: ignore[unsupported-operation]
+      d_right = np.abs(value - ticks[right])  # pyrefly: ignore[unsupported-operation]
       # In case of ties, prefer the left (smaller) index.
       idx = np.where(d_left <= d_right, left, right)
     elif np.ndim(value) == 0:
       idx = np.abs(ticks - value).argmin()
     else:
-      ticks_view = ticks.reshape((-1,) + (1,) * np.ndim(value))
+      ticks_view = ticks.reshape((-1,) + (1,) * np.ndim(value))  # pyrefly: ignore[missing-attribute]
       idx = np.abs(ticks_view - value).argmin(axis=0)
 
     if np.ndim(idx) == 0:
@@ -889,12 +889,12 @@ def map_indexers_using_ticks(
     return {key: idx}, {key}
 
   if method is None:
-    sort_indices = None if ticks_are_sorted else np.argsort(ticks)
-    sorted_ticks = ticks if ticks_are_sorted else ticks[sort_indices]
-    indices = np.searchsorted(sorted_ticks, value)
+    sort_indices = None if ticks_are_sorted else np.argsort(ticks)  # pyrefly: ignore[bad-argument-type]
+    sorted_ticks = ticks if ticks_are_sorted else ticks[sort_indices]  # pyrefly: ignore[unsupported-operation]
+    indices = np.searchsorted(sorted_ticks, value)  # pyrefly: ignore[no-matching-overload]
     if sort_indices is not None:
       indices = sort_indices[indices]
-    unique_retrieved = np.sort(np.unique(ticks[indices]))
+    unique_retrieved = np.sort(np.unique(ticks[indices]))  # pyrefly: ignore[unsupported-operation]
     unique_value = np.sort(np.unique(value))
     if unique_retrieved.size != unique_value.size or np.any(
         unique_retrieved != unique_value
@@ -938,7 +938,7 @@ class LabeledAxis(Coordinate):
 
   @functools.cached_property
   def _sorted_ticks(self) -> bool:
-    return np.all(self.ticks[:-1] <= self.ticks[1:])
+    return np.all(self.ticks[:-1] <= self.ticks[1:])  # pyrefly: ignore[bad-return]
 
   def map_indexers(
       self,
@@ -1201,7 +1201,7 @@ def from_xarray(
     for coord_type in coord_types:
       if coord_type == CartesianProduct or coord_type == Scalar:
         continue
-      result = coord_type.from_xarray(dims, data_array.coords)
+      result = coord_type.from_xarray(dims, data_array.coords)  # pyrefly: ignore[bad-argument-type]
       if isinstance(result, Coordinate):
         return result
       assert isinstance(result, NoCoordinateMatch)

@@ -61,7 +61,7 @@ def _dimension_names(
 ) -> tuple[str | types.EllipsisType, ...]:
   """Returns a tuple of dimension names from a list of names or coordinates."""
   dims_or_name_tuple = lambda x: x.dims if isinstance(x, Coordinate) else (x,)
-  return sum([dims_or_name_tuple(c) for c in names], start=tuple())
+  return sum([dims_or_name_tuple(c) for c in names], start=tuple())  # pyrefly: ignore[bad-return]
 
 
 def _axes_attrs(field: Field) -> str:
@@ -677,7 +677,7 @@ class Field:
       ValueError: Field has self.named_dims=('x', 'y') but names=('y', 'x') were
       requested.
     """
-    names = _dimension_names(*names)
+    names = _dimension_names(*names)  # pyrefly: ignore[bad-assignment]
     if names != self.named_dims:
       raise ValueError(
           f'Field has {self.named_dims=} but {names=} were requested.'
@@ -740,7 +740,7 @@ class Field:
     """
     self._validate_matching_coords(axis_order)
     untag_dims = _dimension_names(*axis_order)
-    named_array = self.named_array.untag(*untag_dims)
+    named_array = self.named_array.untag(*untag_dims)  # pyrefly: ignore[bad-argument-type]
     axes = {k: v for k, v in self.axes.items() if k not in untag_dims}
     result = Field.from_namedarray(named_array=named_array, axes=axes)
     return result
@@ -807,7 +807,7 @@ class Field:
       :meth:`coordax.Field.untag`
       :func:`coordax.tag`
     """
-    tag_dims = _dimension_names(*names)
+    tag_dims = _dimension_names(*names)  # pyrefly: ignore[bad-argument-type]
     tagged_array = self.named_array.tag(*tag_dims)
     axes = {}
     axes.update(self.axes)
@@ -869,15 +869,16 @@ class Field:
       <Field dims=('x', 'y') shape=(2, 3) axes={} >
     """
     if isinstance(other, Coordinate):
-      other = shape_struct_field(other)
+      other = shape_struct_field(other)  # pyrefly: ignore[bad-assignment]
     for k, v in self.axes.items():
-      if other.axes.get(k) != v:
+      if other.axes.get(k) != v:  # pyrefly: ignore[missing-attribute]
         raise ValueError(
+            # pyrefly: ignore[missing-attribute]
             'cannot broadcast field because axes corresponding to dimension '
             f'{k!r} do not match: {v} vs {other.axes.get(k)}'
         )
-    return Field.from_namedarray(
-        self.named_array.broadcast_like(other.named_array), other.axes
+    return Field.from_namedarray(  # pyrefly: ignore[bad-return]
+        self.named_array.broadcast_like(other.named_array), other.axes  # pyrefly: ignore[bad-argument-type, missing-attribute]
     )
 
   def isel(
@@ -945,9 +946,9 @@ class Field:
       f = f.tag(tmp_axes[-1])
 
     for dim, indexer in zip(dim_names, indexers.values(), strict=True):
-      post_slice_coord = f.coordinate.isel({dim: indexer})
+      post_slice_coord = f.coordinate.isel({dim: indexer})  # pyrefly: ignore[bad-argument-type]
       data_slice = [slice(None)] * f.ndim
-      data_slice[f.named_axes[dim]] = indexer
+      data_slice[f.named_axes[dim]] = indexer  # pyrefly: ignore[bad-index]
       f = field(f.data[tuple(data_slice)], post_slice_coord)
     return f.untag(*tmp_axes)
 
@@ -1337,7 +1338,7 @@ def contains_dims(
 ) -> bool:
   """Returns True if the field or coordinate contains the given dimensions."""
   c = field_or_coord.coordinate if is_field(field_or_coord) else field_or_coord
-  return coordinate_systems.contains_dims(c, *dims)
+  return coordinate_systems.contains_dims(c, *dims)  # pyrefly: ignore[bad-argument-type]
 
 
 @utils.export
@@ -1382,7 +1383,7 @@ def get_coordinate_part(
   c = field_or_coord.coordinate if is_field(field_or_coord) else field_or_coord
   dim_to_axes = {d: ax for d, ax in zip(c.dims, c.axes)}
   return coordinate_systems.compose(
-      *[d if coordinate_systems.is_coord(d) else dim_to_axes[d] for d in dims]
+      *[d if coordinate_systems.is_coord(d) else dim_to_axes[d] for d in dims]  # pyrefly: ignore[bad-index]
   )
 
 

@@ -52,7 +52,7 @@ def assert_fields_allclose(
   assert_field_properties(
       actual=actual,
       data=desired.data,
-      dims=desired.dims,
+      dims=desired.dims,  # pyrefly: ignore[bad-argument-type]
       shape=desired.shape,
       axes=desired.axes,
       named_shape=desired.named_shape,
@@ -67,7 +67,7 @@ def assert_fields_equal(actual: coordax.Field, desired: coordax.Field):
   assert_field_properties(
       actual=actual,
       data=desired.data,
-      dims=desired.dims,
+      dims=desired.dims,  # pyrefly: ignore[bad-argument-type]
       shape=desired.shape,
       axes=desired.axes,
       named_shape=desired.named_shape,

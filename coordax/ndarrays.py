@@ -141,8 +141,8 @@ def register_ndarray(
     :class:`coordax.experimental.NDArray`
   """
   NDArray.register(array_type)
-  _TO_NUMPY_FUNCS.append((array_type, to_numpy))
-  _FROM_NUMPY_FUNCS.append((is_matching_numpy_array, from_numpy))
+  _TO_NUMPY_FUNCS.append((array_type, to_numpy))  # pyrefly: ignore[bad-argument-type]
+  _FROM_NUMPY_FUNCS.append((is_matching_numpy_array, from_numpy))  # pyrefly: ignore[bad-argument-type]
   return array_type
 
 

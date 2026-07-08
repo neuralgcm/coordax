@@ -114,7 +114,7 @@ class NamedArrayAdapter(ndarray_adapters.NDArrayAdapter['NamedArray']):
               'Valid mask must be broadcastable to the shape of ``array``, but '
               f'it had extra axis names {bad_names}'
           )
-        mask = mask.order_as(*(d for d in array.dims if d in mask.dims))
+        mask = mask.order_as(*(d for d in array.dims if d in mask.dims))  # pyrefly: ignore[bad-argument-type]
         mask_data = mask.data
       else:
         if np.broadcast_shapes(mask.shape, array.shape) != array.shape:
@@ -126,14 +126,14 @@ class NamedArrayAdapter(ndarray_adapters.NDArrayAdapter['NamedArray']):
     if isinstance(array.data, jax.Array):
       return jax_support.JAXArrayAdapter().get_array_data_with_truncation(
           array=array.data,
-          mask=mask_data,
+          mask=mask_data,  # pyrefly: ignore[bad-argument-type]
           edge_items_per_axis=edge_items_per_axis,
       )
     else:
       assert isinstance(array.data, np.ndarray | ndarrays.NDArray)
       return numpy_support.NumpyArrayAdapter().get_array_data_with_truncation(
           array=ndarrays.to_numpy_array(array.data),
-          mask=mask_data,
+          mask=mask_data,  # pyrefly: ignore[bad-argument-type]
           edge_items_per_axis=edge_items_per_axis,
       )
 
@@ -445,7 +445,7 @@ def _nmap_with_doc(
     def wrap_output(data: Array) -> NamedArray:
       dims = [None] * data.ndim
       for dim, axis in out_axes_dict.items():
-        dims[axis] = dim
+        dims[axis] = dim  # pyrefly: ignore[unsupported-operation]
       return NamedArray(data, tuple(dims))
 
     is_array = lambda x: isinstance(x, Array)
@@ -719,7 +719,7 @@ class NamedArray:
 
     # Restored NamedArray objects may have additional or removed leading
     # dimensions, if produced with scan or vmap.
-    result = cls._new_with_padded_or_trimmed_dims(data, dims)
+    result = cls._new_with_padded_or_trimmed_dims(data, dims)  # pyrefly: ignore[bad-argument-type]
     expected_named_shape = _named_shape(dims, shape)
     if result.named_shape != expected_named_shape:
       raise ValueError(
@@ -799,7 +799,7 @@ class NamedArray:
         dim_queue.pop() if dim is None else dim for dim in self.dims
     )
     assert not dim_queue
-    return type(self)(self.data, new_dims)
+    return type(self)(self.data, new_dims)  # pyrefly: ignore[bad-argument-type]
 
   def untag(self, *dims: str) -> Self:
     """Removes the requested dimension names.
@@ -873,10 +873,10 @@ class NamedArray:
           dim for dim in self.dims if dim not in explicit_dims
       )
       i = dims.index(...)
-      dims = dims[:i] + implicit_dims + dims[i + 1 :]
+      dims = dims[:i] + implicit_dims + dims[i + 1 :]  # pyrefly: ignore[bad-assignment]
 
     order = tuple(self.dims.index(dim) for dim in dims)
-    return type(self)(self.data.transpose(order), dims)
+    return type(self)(self.data.transpose(order), dims)  # pyrefly: ignore[bad-argument-type]
 
   def broadcast_like(self, other: Self) -> Self:
     """Broadcasts the array to the shape of the other array."""
@@ -902,8 +902,8 @@ class NamedArray:
   # Convenience wrappers: Elementwise infix operators.
   __lt__ = _nmap_binary_op(operator.lt, 'jax.Array.__lt__')
   __le__ = _nmap_binary_op(operator.le, 'jax.Array.__le__')
-  __eq__ = _nmap_binary_op(operator.eq, 'jax.Array.__eq__')
-  __ne__ = _nmap_binary_op(operator.ne, 'jax.Array.__ne__')
+  __eq__ = _nmap_binary_op(operator.eq, 'jax.Array.__eq__')  # pyrefly: ignore[bad-override]
+  __ne__ = _nmap_binary_op(operator.ne, 'jax.Array.__ne__')  # pyrefly: ignore[bad-override]
   __ge__ = _nmap_binary_op(operator.ge, 'jax.Array.__ge__')
   __gt__ = _nmap_binary_op(operator.gt, 'jax.Array.__gt__')
 
