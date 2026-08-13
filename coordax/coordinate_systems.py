@@ -889,7 +889,7 @@ def map_indexers_using_ticks(
     return {key: idx}, {key}
 
   if method is None:
-    sort_indices = None if ticks_are_sorted else np.argsort(ticks)  # pyrefly: ignore[bad-argument-type]
+    sort_indices = None if ticks_are_sorted else np.argsort(ticks)  # pyrefly: ignore[bad-argument-type, no-matching-overload]
     sorted_ticks = ticks if ticks_are_sorted else ticks[sort_indices]  # pyrefly: ignore[unsupported-operation]
     indices = np.searchsorted(sorted_ticks, value)  # pyrefly: ignore[no-matching-overload]
     if sort_indices is not None:
