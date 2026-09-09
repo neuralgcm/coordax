@@ -153,8 +153,8 @@ def register_ndarray(
 register_ndarray(
     jax.ShapeDtypeStruct,
     is_matching_numpy_array=lambda x: isinstance(x, jax.ShapeDtypeStruct),
-    to_numpy=lambda x: x,  # passthrough, provides informative repr/display.
-    from_numpy=lambda x: x,  # unused, as no numpy equivalent exists.
+    to_numpy=lambda x: x,  # passthrough, provides informative repr/display.  # pyrefly: ignore[bad-argument-type]
+    from_numpy=lambda x: x,  # unused, as no numpy equivalent exists.  # pyrefly: ignore[bad-argument-type]
 )
 
 
@@ -162,12 +162,12 @@ if jax_datetime is not None:
   register_ndarray(
       jax_datetime.Timedelta,
       lambda x: np.issubdtype(x.dtype, np.timedelta64),
-      lambda x: x.to_timedelta64(),
+      lambda x: x.to_timedelta64(),  # pyrefly: ignore[bad-argument-type]
       jax_datetime.Timedelta.from_timedelta64,
   )
   register_ndarray(
       jax_datetime.Datetime,
       lambda x: np.issubdtype(x.dtype, np.datetime64),
-      lambda x: x.to_datetime64(),
+      lambda x: x.to_datetime64(),  # pyrefly: ignore[bad-argument-type]
       jax_datetime.Datetime.from_datetime64,
   )
