@@ -10,8 +10,8 @@ import numpy as np
 
 def assert_field_properties(
     actual: coordax.Field,
-    data: np.ndarray | jax.Array | coordax.NDArray | None = None,
-    dims: tuple[str, ...] | None = None,
+    data: np.ndarray | jax.Array | coordax.ndarrays.Array | None = None,
+    dims: tuple[str | None, ...] | None = None,
     shape: tuple[int, ...] | None = None,
     axes: Mapping[str, coordax.Coordinate] | None = None,
     coord_field_keys: set[str] | None = None,
@@ -52,7 +52,7 @@ def assert_fields_allclose(
   assert_field_properties(
       actual=actual,
       data=desired.data,
-      dims=desired.dims,  # pyrefly: ignore[bad-argument-type]
+      dims=desired.dims,
       shape=desired.shape,
       axes=desired.axes,
       named_shape=desired.named_shape,
@@ -67,7 +67,7 @@ def assert_fields_equal(actual: coordax.Field, desired: coordax.Field):
   assert_field_properties(
       actual=actual,
       data=desired.data,
-      dims=desired.dims,  # pyrefly: ignore[bad-argument-type]
+      dims=desired.dims,
       shape=desired.shape,
       axes=desired.axes,
       named_shape=desired.named_shape,

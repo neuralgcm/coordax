@@ -24,7 +24,7 @@ import collections
 import functools
 import operator
 import types
-from typing import Any, Callable, Literal, Self, TYPE_CHECKING, TypeAlias, TypeGuard, TypeVar
+from typing import Any, Callable, Literal, Self, TYPE_CHECKING, TypeAlias, TypeVar
 import warnings
 
 from coordax import coordinate_systems
@@ -37,6 +37,7 @@ import numpy as np
 import treescope
 from treescope import lowering
 from treescope import rendering_parts
+import typing_extensions
 
 if TYPE_CHECKING:
   import xarray
@@ -1255,7 +1256,7 @@ def from_xarray(
 
 
 @utils.export
-def is_field(value) -> TypeGuard[Field]:
+def is_field(value) -> typing_extensions.TypeIs[Field]:
   """Returns True if ``value`` is of type ``Field``."""
   return isinstance(value, Field)
 
@@ -1338,7 +1339,7 @@ def contains_dims(
 ) -> bool:
   """Returns True if the field or coordinate contains the given dimensions."""
   c = field_or_coord.coordinate if is_field(field_or_coord) else field_or_coord
-  return coordinate_systems.contains_dims(c, *dims)  # pyrefly: ignore[bad-argument-type]
+  return coordinate_systems.contains_dims(c, *dims)
 
 
 @utils.export
@@ -1383,7 +1384,7 @@ def get_coordinate_part(
   c = field_or_coord.coordinate if is_field(field_or_coord) else field_or_coord
   dim_to_axes = {d: ax for d, ax in zip(c.dims, c.axes)}
   return coordinate_systems.compose(
-      *[d if coordinate_systems.is_coord(d) else dim_to_axes[d] for d in dims]  # pyrefly: ignore[bad-argument-type, bad-index]
+      *[d if coordinate_systems.is_coord(d) else dim_to_axes[d] for d in dims]
   )
 
 

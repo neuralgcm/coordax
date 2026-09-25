@@ -26,12 +26,13 @@ import dataclasses
 import functools
 import itertools
 import typing
-from typing import Any, Literal, Self, TYPE_CHECKING, Type, TypeAlias, TypeGuard, TypeVar
+from typing import Any, Literal, Self, TYPE_CHECKING, Type, TypeAlias, TypeVar
 import warnings
 
 from coordax import utils
 import jax
 import numpy as np
+import typing_extensions
 
 if TYPE_CHECKING:
   # import only under TYPE_CHECKING to avoid circular dependency
@@ -46,7 +47,7 @@ Sequence = collections.abc.Sequence
 SelMethod: TypeAlias = Literal['nearest'] | None
 
 
-@functools.partial(utils.export, module='coordax.coords')
+@utils.export(module='coordax.coords')
 @dataclasses.dataclass(frozen=True)
 class NoCoordinateMatch:
   """For use when no Coordax coordinate matches xarray coordinate."""
@@ -356,7 +357,7 @@ def unpack_and_validate_indexers(
   return unpacked_indexers, unpacked_coords
 
 
-@functools.partial(utils.export, module='coordax.coords')
+@utils.export(module='coordax.coords')
 @dataclasses.dataclass(frozen=True)
 class ArrayKey:
   """Wrapper for a numpy array to make it hashable."""
@@ -376,7 +377,7 @@ class ArrayKey:
 
 
 @utils.export
-def is_coord(obj: Any) -> TypeGuard[Coordinate]:
+def is_coord(obj: Any) -> typing_extensions.TypeIs[Coordinate]:
   """Returns True if obj is a Coordinate."""
   return isinstance(obj, Coordinate)
 
@@ -534,7 +535,7 @@ def _consolidate_coordinates(
   return tuple(result)
 
 
-@functools.partial(utils.export, module='coordax.coords')
+@utils.export(module='coordax.coords')
 def canonicalize(*coordinates: Coordinate) -> tuple[Coordinate, ...]:
   """Canonicalize coordinates into a minimum equivalent collection.
 
@@ -599,9 +600,8 @@ class CartesianProduct(Coordinate):
 
   coordinates: tuple[Coordinate, ...]
 
-  def __post_init__(self):
-    coordinates = canonicalize(*self.coordinates)
-    object.__setattr__(self, 'coordinates', coordinates)
+  def __init__(self, coordinates: Sequence[Coordinate] = ()):
+    object.__setattr__(self, 'coordinates', canonicalize(*coordinates))
 
   def __eq__(self, other):
     # TODO(shoyer): require exact equality of coordinate types?
@@ -916,8 +916,9 @@ class LabeledAxis(Coordinate):
   name: str
   ticks: np.ndarray
 
-  def __post_init__(self):
-    object.__setattr__(self, 'ticks', np.asarray(self.ticks))
+  def __init__(self, name: str, ticks: np.typing.ArrayLike):
+    object.__setattr__(self, 'name', name)
+    object.__setattr__(self, 'ticks', np.asarray(ticks))
     if self.ticks.ndim != 1:
       raise ValueError(f'ticks must be a 1D array, got {self.ticks.shape=}')
 
@@ -990,7 +991,7 @@ class LabeledAxis(Coordinate):
     return cls(dim, coords[dim].data)
 
 
-@functools.partial(utils.export, module='coordax.coords')
+@utils.export(module='coordax.coords')
 def compose(*coordinates: Coordinate) -> Coordinate:
   # pylint: disable=line-too-long
   # fmt: off
@@ -1020,7 +1021,7 @@ def compose(*coordinates: Coordinate) -> Coordinate:
       return product
 
 
-@functools.partial(utils.export, module='coordax.coords')
+@utils.export(module='coordax.coords')
 def insert_axes(
     coordinate: Coordinate,
     indices_to_axes: dict[int, Coordinate],
@@ -1058,7 +1059,7 @@ def insert_axes(
   return compose(*axes)
 
 
-@functools.partial(utils.export, module='coordax.coords')
+@utils.export(module='coordax.coords')
 def replace_axes(
     coordinate: Coordinate,
     to_replace: Coordinate,
@@ -1112,11 +1113,14 @@ def replace_axes(
   return compose(*axes)
 
 
-@functools.partial(utils.export, module='coordax.coords')
+CoordinateT = TypeVar('CoordinateT', bound=Coordinate)
+
+
+@utils.export(module='coordax.coords')
 def extract(
     coord: Coordinate,
-    component_type: Type[Coordinate] | tuple[Type[Coordinate], ...],
-) -> Coordinate:
+    component_type: Type[CoordinateT] | tuple[Type[CoordinateT], ...],
+) -> CoordinateT:
   """Extracts component of type `component_type` from the `coord`.
 
   Args:
@@ -1147,7 +1151,7 @@ def extract(
   return result
 
 
-@functools.partial(utils.export, module='coordax.coords')
+@utils.export(module='coordax.coords')
 def from_xarray(
     data_array: xarray.DataArray,
     coord_types: Sequence[type[Coordinate]] = (LabeledAxis, DummyAxis),
