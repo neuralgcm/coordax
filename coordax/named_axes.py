@@ -28,7 +28,7 @@ import functools
 import operator
 import textwrap
 import types
-from typing import Any, Callable, Literal, Self, TypeAlias, TypeGuard, TypeVar
+from typing import Any, Callable, Literal, Self, TypeAlias, TypeVar
 
 from coordax import ndarrays
 import jax
@@ -39,6 +39,7 @@ from treescope import ndarray_adapters
 from treescope import rendering_parts
 from treescope.external import jax_support
 from treescope.external import numpy_support
+import typing_extensions
 
 
 Array = ndarrays.Array
@@ -973,7 +974,7 @@ class NamedArray:
 PyTree = Any
 
 
-def is_namedarray(array: Any) -> TypeGuard[NamedArray]:
+def is_namedarray(array: Any) -> typing_extensions.TypeIs[NamedArray]:
   return isinstance(array, NamedArray)
 
 
