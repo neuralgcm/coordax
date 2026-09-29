@@ -12,12 +12,29 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Internal Coordax utilities."""
-from typing import TypeVar
+from collections.abc import Callable
+from typing import TypeVar, overload
 
 
 T = TypeVar('T')
 
 
+@overload
 def export(obj: T, module: str = 'coordax') -> T:
+  ...
+
+
+@overload
+def export(
+    obj: None = None, *, module: str = 'coordax'
+) -> Callable[[T], T]:
+  ...
+
+
+def export(
+    obj: T | None = None, module: str = 'coordax'
+) -> T | Callable[[T], T]:
+  if obj is None:
+    return lambda x: export(x, module=module)
   obj.__module__ = module
   return obj

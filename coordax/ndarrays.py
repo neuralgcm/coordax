@@ -16,8 +16,7 @@
 from __future__ import annotations
 
 import abc
-import functools
-from typing import Any, Callable, Self, TypeVar
+from typing import Any, Callable, Protocol, Self, TYPE_CHECKING, TypeVar
 
 from coordax import utils
 import jax
@@ -29,8 +28,30 @@ except ImportError:
   jax_datetime = None
 
 
+class _NDArrayProtocol(Protocol):
+  """Structural protocol for duck-typed arrays registered via register_ndarray."""
+
+  @property
+  def shape(self) -> tuple[int, ...]:
+    ...
+
+  @property
+  def size(self) -> int:
+    ...
+
+  @property
+  def ndim(self) -> int:
+    ...
+
+  def transpose(self, axes: tuple[int, ...]) -> Any:
+    ...
+
+  def __getitem__(self, value: Any) -> Any:
+    ...
+
+
 # TODO(shoyer): should this be a protocol?
-@functools.partial(utils.export, module='coordax.experimental')
+@utils.export(module='coordax.experimental')
 class NDArray(abc.ABC):
   """Abstract base class for non-JAX arrays that can be used with Coordax.
 
@@ -74,8 +95,22 @@ class NDArray(abc.ABC):
 PythonScalar = bool | int | float | complex
 NumPyScalar = np.generic
 Scalar = NumPyScalar | PythonScalar
-ArrayLike = Scalar | np.ndarray | jax.Array | NDArray | jax.ShapeDtypeStruct
-Array = np.ndarray | jax.Array | NDArray
+if TYPE_CHECKING:
+  ArrayLike = (
+      Scalar
+      | np.ndarray
+      | jax.Array
+      | NDArray
+      | _NDArrayProtocol
+      | jax.ShapeDtypeStruct
+      | jax.typing.ArrayLike
+  )
+  Array = np.ndarray | jax.Array | NDArray | _NDArrayProtocol
+else:
+  ArrayLike = (
+      Scalar | np.ndarray | jax.Array | NDArray | jax.ShapeDtypeStruct
+  )
+  Array = np.ndarray | jax.Array | NDArray
 
 
 def to_array(data: ArrayLike) -> Array:
@@ -127,7 +162,7 @@ _FROM_NUMPY_FUNCS: list[
 ] = []
 
 
-@functools.partial(utils.export, module='coordax.experimental')
+@utils.export(module='coordax.experimental')
 def register_ndarray(
     array_type: type[T],
     is_matching_numpy_array: Callable[[np.ndarray], bool],
