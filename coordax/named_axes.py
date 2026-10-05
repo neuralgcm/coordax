@@ -91,7 +91,7 @@ class NamedArrayAdapter(ndarray_adapters.NDArrayAdapter['NamedArray']):
       else:
         infos[axis] = ndarray_adapters.NamedPositionalAxisInfo(
             axis_logical_index=axis,
-            axis_name=dim,  # pytype: disable=wrong-arg-types
+            axis_name=dim,  # pyrefly: ignore[bad-argument-type]
             size=array.shape[axis],
         )
     return tuple(infos[i] for i in range(len(infos)))

@@ -947,7 +947,7 @@ class Field:
       f = f.tag(tmp_axes[-1])
 
     for dim, indexer in zip(dim_names, indexers.values(), strict=True):
-      post_slice_coord = f.coordinate.isel({dim: indexer})  # pyrefly: ignore[bad-argument-type, bad-assignment]
+      post_slice_coord = f.coordinate.isel({dim: indexer})  # pyrefly: ignore[bad-assignment]
       data_slice = [slice(None)] * f.ndim
       data_slice[f.named_axes[dim]] = indexer  # pyrefly: ignore[bad-index]
       f = field(f.data[tuple(data_slice)], post_slice_coord)

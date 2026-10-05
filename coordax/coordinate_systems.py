@@ -327,7 +327,6 @@ def unpack_and_validate_indexers(
   """Unpacks multidimensional indexers and raises if slice.step is not None."""
   unpacked_indexers = {}
   unpacked_coords = {}
-  # pytype: disable=attribute-error
   for k, v in indexers.items():
     if is_coord(k) and k.ndim > 1:
       key_coord = k
@@ -353,7 +352,6 @@ def unpack_and_validate_indexers(
             'not supported.'
         )
       unpacked_indexers[k] = v
-  # pytype: enable=attribute-error
   return unpacked_indexers, unpacked_coords
 
 
@@ -389,7 +387,7 @@ def contains_dims(
   """Returns True if coordinate contains the given dimensions or coordinates."""
   dim_names = filter(lambda x: isinstance(x, str), dims)
   dim_coords = filter(is_coord, dims)
-  dim_axes = _concat_tuples((c.axes for c in dim_coords))  # pytype: disable=attribute-error
+  dim_axes = _concat_tuples((c.axes for c in dim_coords))
   contain_names = set(dim_names).issubset(coord.dims)
   contain_coords = set(dim_axes).issubset(coord.axes)
   return contain_names and contain_coords
@@ -889,7 +887,7 @@ def map_indexers_using_ticks(
     return {key: idx}, {key}
 
   if method is None:
-    sort_indices = None if ticks_are_sorted else np.argsort(ticks)  # pyrefly: ignore[bad-argument-type, no-matching-overload]
+    sort_indices = None if ticks_are_sorted else np.argsort(ticks)  # pyrefly: ignore[no-matching-overload]
     sorted_ticks = ticks if ticks_are_sorted else ticks[sort_indices]  # pyrefly: ignore[unsupported-operation]
     indices = np.searchsorted(sorted_ticks, value)  # pyrefly: ignore[no-matching-overload]
     if sort_indices is not None:
