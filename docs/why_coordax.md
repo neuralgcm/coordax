@@ -124,16 +124,16 @@ labeled array operations. Users can write those themselves, as needed, and a
 small core makes Coordax easy to hack on.
 
 This means that some array library features that you might expect
-(e.g., indexing and concatenating arrays) are not built-in -- but are easy to
-implement yourself with `cmap`, e.g.,
+(e.g., reductions and concatenating arrays) are not built-in -- but are easy to
+implement yourself with `cmap` or `cpmap`, e.g.,
 
 ```python
 import coordax as cx
 import jax.numpy as jnp
 
-def index(field: cx.Field, axis: str | cx.Coordinate, value: int) -> cx.Field:
-  """Integer indexing like xarray.DataArray.isel({axis: value})."""
-  return cx.cmap(lambda x: x[value])(field.untag(axis))
+def mean(field: cx.Field, axis: str | cx.Coordinate) -> cx.Field:
+  """Mean along an axis like xarray.DataArray.mean(axis)."""
+  return cx.cpmap(jnp.mean)(field.untag(axis))
 
 def concat(fields: list[cx.Field], axis: str) -> cx.Field:
   """Concatenate arrays along an existing axis."""

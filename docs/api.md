@@ -12,7 +12,9 @@
 
     Field
     Field.broadcast_like
+    Field.isel
     Field.order_as
+    Field.sel
     Field.tag
     Field.untag
     Field.unwrap
@@ -22,7 +24,9 @@
     tag
     untag
     is_field
+    contains_dims
     get_coordinate
+    get_coordinate_part
     new_axis_name
     shape_struct_field
 ```
@@ -34,14 +38,19 @@
     :toctree: _autosummary
 
     Coordinate
+    Coordinate.isel
+    Coordinate.sel
     CartesianProduct
     DummyAxis
     LabeledAxis
     Scalar
     SizedAxis
     SelectedAxis
+    is_coord
+    coords.ArrayKey
     coords.canonicalize
     coords.compose
+    coords.extract
     coords.insert_axes
     coords.replace_axes
 ```
