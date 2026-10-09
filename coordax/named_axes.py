@@ -174,7 +174,9 @@ class NamedArrayAdapter(ndarray_adapters.NDArrayAdapter['NamedArray']):
 
 
 OutAxes: TypeAlias = (
-    dict[str, int] | Literal['leading', 'trailing', 'same_as_input']
+    dict[str, int]
+    | tuple[str | types.EllipsisType | None, ...]
+    | Literal['leading', 'trailing', 'same_as_input']
 )
 
 
@@ -215,24 +217,133 @@ def _collect_named_shape(
   return known_sizes
 
 
+def _out_axes_from_template(
+    template: tuple[str | types.EllipsisType | None, ...],
+    named_shape: dict[str, int],
+) -> tuple[dict[str, int], int | None]:
+  """Converts a dimensions template for out_axes into axis positions.
+
+  Args:
+    template: desired dimensions on each output, consisting of dimension names,
+      ``None`` for positional axes, or at most one ``...`` for any number of
+      positional axes.
+    named_shape: named shape of all inputs to nmap.
+
+  Returns:
+    A tuple ``(out_axes, positional_ndim)``, where ``out_axes`` maps dimension
+    names to axis positions on the outputs, and ``positional_ndim`` is the
+    required number of positional axes on each output, or ``None`` if outputs
+    can have any number of positional axes.
+  """
+  if not all(
+      isinstance(dim, (str, types.EllipsisType, types.NoneType))
+      for dim in template
+  ):
+    raise TypeError(
+        f'out_axes must only contain strings, ... or None, but got {template}'
+    )
+  names = [dim for dim in template if isinstance(dim, str)]
+  if len(set(names)) != len(names) or set(names) != set(named_shape):
+    raise ValueError(
+        f'out_axes={template} must include each of the named dimensions '
+        f'{list(named_shape)} exactly once'
+    )
+  ellipsis_count = sum(dim is ... for dim in template)
+  if ellipsis_count > 1:
+    raise ValueError(f'out_axes contains multiple ellipses (...): {template}')
+  if ellipsis_count and any(dim is None for dim in template):
+    raise ValueError(f'out_axes cannot contain both ... and None: {template}')
+
+  positional = [i for i, dim in enumerate(template) if not isinstance(dim, str)]
+  if not positional:
+    return {dim: i for i, dim in enumerate(names)}, 0
+  start, stop = positional[0], positional[-1] + 1
+  if stop - start != len(positional):
+    # Each one of non-contiguous `None` entries indicates exactly one axis.
+    out_axes = {
+        dim: i for i, dim in enumerate(template) if isinstance(dim, str)
+    }
+    return out_axes, len(positional)
+  # Positional axes are contiguous, so we count dimensions before them from the
+  # start and after them from the end. This supports outputs with any number of
+  # positional axes, without needing to know their shapes in advance.
+  return {
+      dim: i if i < start else i - len(template)
+      for i, dim in enumerate(template)
+      if isinstance(dim, str)
+  }, None
+
+
+def _same_as_input_template(
+    named_arrays: list[NamedArray],
+) -> tuple[str | types.EllipsisType, ...] | None:
+  """Returns a template of dimensions shared by all inputs, if one exists.
+
+  A shared template exists if all inputs have the same named dimensions in the
+  same order, and positional axes on inputs (if any) form a contiguous block at
+  the same location relative to named dimensions. Inputs without positional
+  axes are compatible with any location of positional axes, which are trailing
+  if no input has positional axes.
+
+  Args:
+    named_arrays: NamedArray inputs with at least one named dimension.
+
+  Returns:
+    Template of dimensions with ``...`` at the location of positional axes, or
+    ``None`` if no shared template exists.
+  """
+  named_dims = named_arrays[0].named_dims
+  if any(arr.named_dims != named_dims for arr in named_arrays):
+    return None
+  locations = set()
+  for arr in named_arrays:
+    positional = [i for i, dim in enumerate(arr.dims) if dim is None]
+    if positional:
+      if positional[-1] - positional[0] + 1 != len(positional):
+        return None
+      locations.add(positional[0])
+  if len(locations) > 1:
+    return None
+  location = locations.pop() if locations else len(named_dims)
+  return named_dims[:location] + (...,) + named_dims[location:]
+
+
 def _normalize_out_axes(
     out_axes: OutAxes,
     named_shape: dict[str, int],
     named_arrays: list[NamedArray],
-) -> dict[str, int]:
-  """Normalize the out_axes argument to nmap."""
+) -> tuple[dict[str, int], int | None]:
+  """Normalize the out_axes argument to nmap.
+
+  Args:
+    out_axes: out_axes argument to nmap.
+    named_shape: named shape of all inputs to nmap.
+    named_arrays: all NamedArray inputs to nmap.
+
+  Returns:
+    A tuple ``(out_axes_dict, positional_ndim)``, where ``out_axes_dict`` maps
+    dimension names to axis positions on the outputs, and ``positional_ndim`` is
+    the required number of positional axes on each output, or ``None`` if not
+    constrained.
+  """
   match out_axes:
     case 'trailing':
       return {
           dim: -(i + 1)
           for i, dim in enumerate(reversed(list(named_shape.keys())))
-      }
+      }, None
     case 'leading':
-      return {dim: i for i, dim in enumerate(named_shape.keys())}
+      return {dim: i for i, dim in enumerate(named_shape.keys())}, None
     case 'same_as_input':
       named_arrays_with_axes = [arr for arr in named_arrays if arr.named_axes]
       if not named_arrays_with_axes:
-        return {}
+        return {}, None
+      template = _same_as_input_template(named_arrays_with_axes)
+      if template is not None:
+        return _out_axes_from_template(template, named_shape)
+      # Without a shared template, inputs are either incompatible (raised
+      # below) or have non-contiguous positional axes, in which case we keep
+      # named axes at their exact positions.
       unique_named_axes = {
           tuple(sorted(arr.named_axes.items()))
           for arr in named_arrays_with_axes
@@ -241,13 +352,16 @@ def _normalize_out_axes(
         named_axes_list = [arr.named_axes for arr in named_arrays_with_axes]
         raise ValueError(
             "'same_as_input' for out_axes requires all NamedArray inputs with"
-            ' named axes to have the same named_axes. Found multiple'
+            ' named axes to have the same named dimensions in the same order,'
+            ' with positional axes at the same location. Found multiple'
             f' distinct named_axes on inputs:\n{named_axes_list}'
         )
       [unique_named_axes] = unique_named_axes
-      return dict(unique_named_axes)
+      return dict(unique_named_axes), None
     case str():
       raise ValueError(f'Unsupported string literal for out_axes: {out_axes!r}')
+    case tuple():
+      return _out_axes_from_template(out_axes, named_shape)
     case _:
       if out_axes.keys() != named_shape.keys():
         raise ValueError(
@@ -268,7 +382,7 @@ def _normalize_out_axes(
         raise ValueError(
             f'out_axes must all have unique values, but got {out_axes}'
         )
-      return out_axes
+      return out_axes, None
 
 
 def _nest_vmap_axis(inner_axis: int, outer_axis: int) -> int:
@@ -279,26 +393,23 @@ def _nest_vmap_axis(inner_axis: int, outer_axis: int) -> int:
     else:
       assert inner_axis < outer_axis
       return inner_axis
-  else:
-    assert outer_axis < 0 and inner_axis < 0
+  elif outer_axis < 0 and inner_axis < 0:
     if inner_axis > outer_axis:
       return inner_axis
     else:
       assert inner_axis < outer_axis
       return inner_axis + 1
-
-
-OutAxes: TypeAlias = (
-    dict[str, int] | Literal['leading', 'trailing', 'same_as_input']
-)
+  else:
+    # Mixed signs only arise from out_axes templates, where all non-negative
+    # axes precede all negative axes. Removing the outer axis thus does not
+    # change the position of the inner axis relative to the start or the end.
+    return inner_axis
 
 
 # fmt: off
 def nmap(
     fun: Callable,  # pylint: disable=g-bare-generic
-    out_axes: (
-        dict[str, int] | Literal['leading', 'trailing', 'same_as_input']
-    ) = 'trailing',
+    out_axes: OutAxes = 'trailing',
     *,
     vmap: Callable = jax.vmap,  # pylint: disable=g-bare-generic
 ) -> Callable:  # pylint: disable=g-bare-generic
@@ -336,12 +447,25 @@ def nmap(
       - dict[str, int]: mapping from dimension name to axis position. Keys must
         include all named dimensions present in the inputs. Axis positions be
         unique and either all positive or all negative.
+      - tuple of dimension names, ``None`` and ``...``: template for the
+        dimensions of every output, e.g., ``('x', ..., 'y')`` or ``array.dims``.
+        Must include all named dimensions present in the inputs exactly once.
+        Positional axes of the outputs are placed at the location of ``...`` or
+        ``None`` entries. If these are contiguous, outputs may have any number
+        of positional axes (e.g., if ``fun`` adds or removes axes). Otherwise,
+        outputs must have exactly one positional axis per ``None``. Without
+        ``...`` or ``None``, outputs cannot have positional axes.
       - 'leading': dimension names will appear as the leading axes on every
         output, in order of their appearance on the inputs.
       - 'trailing': dimension names will appear as the trailing axes on every
         output, in order of their appearance on the inputs.
       - 'same_as_input': dimension names will appear in the same order as in the
-        inputs, where the inputs must all have the same named axes.
+        inputs, and positional axes at the same location as on the inputs (or
+        trailing, if no inputs have positional axes). Inputs must all have the
+        same named dimensions in the same order, with positional axes at the
+        same location. If positional axes on the inputs are contiguous, ``fun``
+        may change their number. Otherwise, outputs must have the same number
+        of dimensions as the inputs.
     vmap: Vectorizing transformation to use when mapping over named axes.
       Defaults to jax.vmap. A different implementation can be used to make
       coordax compatible with custom objects (e.g. neural net modules).
@@ -371,9 +495,7 @@ def _nmap_with_doc(
     fun: Callable,  # pylint: disable=g-bare-generic
     fun_name: str,
     fun_doc: str | None = None,
-    out_axes: (
-        dict[str, int] | Literal['leading', 'trailing', 'same_as_input']
-    ) = 'trailing',
+    out_axes: OutAxes = 'trailing',
     *,
     vmap: Callable = jax.vmap,  # pylint: disable=g-bare-generic
 ) -> Callable:  # pylint: disable=g-bare-generic
@@ -392,7 +514,9 @@ def _nmap_with_doc(
         leaves_and_paths, source_description=f'nmap({fun})'
     )
     all_dims = tuple(named_shape.keys())
-    out_axes_dict = _normalize_out_axes(out_axes, named_shape, named_arrays)
+    out_axes_dict, positional_ndim = _normalize_out_axes(
+        out_axes, named_shape, named_arrays
+    )
 
     nested_in_axes = {}
     nested_out_axes = {}
@@ -444,6 +568,17 @@ def _nmap_with_doc(
     result = vectorized_fun(leaf_data)
 
     def wrap_output(data: Array) -> NamedArray:
+      if (
+          positional_ndim is not None
+          and data.ndim - len(out_axes_dict) != positional_ndim
+      ):
+        raise ValueError(
+            f'out_axes={out_axes!r} requires outputs of nmap({fun_name}) to'
+            f' have exactly {positional_ndim} positional axes, but got an'
+            f' output with {data.ndim - len(out_axes_dict)} positional axes.'
+            ' Use a single ... or contiguous None entries in out_axes to allow'
+            ' any number of positional axes.'
+        )
       dims = [None] * data.ndim
       for dim, axis in out_axes_dict.items():
         dims[axis] = dim  # pyrefly: ignore[unsupported-operation]

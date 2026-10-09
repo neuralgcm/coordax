@@ -784,7 +784,8 @@ class NamedAxesTest(parameterized.TestCase):
         ValueError,
         re.escape(
             "'same_as_input' for out_axes requires all NamedArray inputs with"
-            ' named axes to have the same named_axes. Found multiple'
+            ' named axes to have the same named dimensions in the same order,'
+            ' with positional axes at the same location. Found multiple'
             " distinct named_axes on inputs:\n"
             "[{'x': 0, 'y': 1, 'z': 2}, {'z': 0, 'y': 1, 'x': 2}]"
         ),
@@ -796,8 +797,20 @@ class NamedAxesTest(parameterized.TestCase):
     with self.assertRaisesWithLiteralMatch(
         ValueError,
         "'same_as_input' for out_axes requires all NamedArray inputs with"
-        ' named axes to have the same named_axes. Found multiple'
+        ' named axes to have the same named dimensions in the same order,'
+        ' with positional axes at the same location. Found multiple'
         " distinct named_axes on inputs:\n[{'x': 0}, {'x': 0, 'y': 1}]"
+    ):
+      named_axes.nmap(lambda x, y: x, out_axes='same_as_input')(array1, array2)
+
+    array1 = named_axes.NamedArray(np.zeros((2, 3)), ('x', None))
+    array2 = named_axes.NamedArray(np.zeros((3, 2)), (None, 'x'))
+    with self.assertRaisesWithLiteralMatch(
+        ValueError,
+        "'same_as_input' for out_axes requires all NamedArray inputs with"
+        ' named axes to have the same named dimensions in the same order,'
+        ' with positional axes at the same location. Found multiple'
+        " distinct named_axes on inputs:\n[{'x': 0}, {'x': 1}]"
     ):
       named_axes.nmap(lambda x, y: x, out_axes='same_as_input')(array1, array2)
 
@@ -830,6 +843,196 @@ class NamedAxesTest(parameterized.TestCase):
       )(array, array)
       expected = named_axes.NamedArray(array.data * 2, array.dims)
       assert_named_array_equal(actual, expected)
+
+  def test_nmap_same_as_input_changes_positional_ndim(self):
+    data = np.arange(2 * 3 * 4).reshape((2, 3, 4))
+    outer = lambda x: jnp.outer(x, x)
+
+    with self.subTest('more_positional_axes'):
+      array = named_axes.NamedArray(data, ('x', None, 'z'))
+      actual = named_axes.nmap(outer, out_axes='same_as_input')(array)
+      expected = named_axes.NamedArray(
+          np.einsum('xiz,xjz->xijz', data, data), ('x', None, None, 'z')
+      )
+      assert_named_array_equal(actual, expected)
+
+    with self.subTest('fewer_positional_axes'):
+      array = named_axes.NamedArray(data, ('x', None, 'z'))
+      actual = named_axes.nmap(jnp.sum, out_axes='same_as_input')(array)
+      expected = named_axes.NamedArray(data.sum(axis=1), ('x', 'z'))
+      assert_named_array_equal(actual, expected)
+
+    with self.subTest('leading_positional_axes'):
+      array = named_axes.NamedArray(data, (None, 'y', 'z'))
+      actual = named_axes.nmap(outer, out_axes='same_as_input')(array)
+      expected = named_axes.NamedArray(
+          np.einsum('iyz,jyz->ijyz', data, data), (None, None, 'y', 'z')
+      )
+      assert_named_array_equal(actual, expected)
+
+      actual = named_axes.nmap(jnp.sum, out_axes='same_as_input')(array)
+      expected = named_axes.NamedArray(data.sum(axis=0), ('y', 'z'))
+      assert_named_array_equal(actual, expected)
+
+    with self.subTest('inputs_with_different_positional_ndim'):
+      array1 = named_axes.NamedArray(data, ('x', None, 'z'))
+      array2 = named_axes.NamedArray(
+          data[:, np.newaxis], ('x', None, None, 'z')
+      )
+      actual = named_axes.nmap(jnp.add, out_axes='same_as_input')(
+          array1, array2
+      )
+      expected = named_axes.NamedArray(
+          2 * data[:, np.newaxis], ('x', None, None, 'z')
+      )
+      assert_named_array_equal(actual, expected)
+
+    with self.subTest('inputs_without_positional_axes'):
+      array1 = named_axes.NamedArray(data, ('x', None, 'z'))
+      array2 = named_axes.NamedArray(data.sum(axis=1), ('x', 'z'))
+      actual = named_axes.nmap(jnp.multiply, out_axes='same_as_input')(
+          array1, array2
+      )
+      expected = named_axes.NamedArray(
+          data * data.sum(axis=1, keepdims=True), ('x', None, 'z')
+      )
+      assert_named_array_equal(actual, expected)
+
+    with self.subTest('non_contiguous_positional_axes'):
+      array = named_axes.NamedArray(data, (None, 'y', None))
+      actual = named_axes.nmap(jnp.transpose, out_axes='same_as_input')(array)
+      expected = named_axes.NamedArray(
+          data.transpose(2, 1, 0), (None, 'y', None)
+      )
+      assert_named_array_equal(actual, expected)
+
+  @parameterized.parameters(
+      dict(template=('c', 'a', ..., 'b')),
+      dict(template=('a', ..., 'b', 'c')),
+      dict(template=(..., 'b', 'a', 'c')),
+      dict(template=('b', 'c', 'a', ...)),
+      dict(template=('a', None, None, 'c', 'b')),
+      dict(template=('a', None, 'c', None, 'b')),
+  )
+  def test_nmap_out_axes_template(self, template):
+    data = np.arange(2 * 3 * 4 * 5).reshape((2, 3, 4, 5))
+    array = named_axes.NamedArray(data, ('c', 'a', None, 'b'))
+    add_axis = lambda x: jnp.stack([x, 2 * x])  # adds positional axis 's'.
+    actual = named_axes.nmap(add_axis, out_axes=template)(array)
+
+    stacked = np.stack([data, 2 * data], axis=2)  # dims (c, a, s, p, b)
+    positional = iter(['s', 'p'])
+    expected_dims = []
+    for dim in template:
+      if dim is ...:
+        expected_dims.extend(positional)
+      elif dim is None:
+        expected_dims.append(next(positional))
+      else:
+        expected_dims.append(dim)
+    order = [['c', 'a', 's', 'p', 'b'].index(dim) for dim in expected_dims]
+    expected = named_axes.NamedArray(
+        stacked.transpose(order),
+        tuple(None if dim in ('s', 'p') else dim for dim in expected_dims),
+    )
+    assert_named_array_equal(actual, expected)
+
+  def test_nmap_out_axes_template_changes_positional_ndim(self):
+    data = np.arange(2 * 3 * 4).reshape((2, 3, 4))
+    array = named_axes.NamedArray(data, ('x', 'y', 'z')).untag('y')
+
+    with self.subTest('identity'):
+      actual = named_axes.nmap(lambda x: x, out_axes=array.dims)(array)
+      assert_named_array_equal(actual, array)
+
+    with self.subTest('more_positional_axes'):
+      actual = named_axes.nmap(
+          lambda x: jnp.outer(x, x), out_axes=array.dims
+      )(array)
+      expected = named_axes.NamedArray(
+          np.einsum('xiz,xjz->xijz', data, data), ('x', None, None, 'z')
+      )
+      assert_named_array_equal(actual, expected)
+
+    with self.subTest('fewer_positional_axes'):
+      actual = named_axes.nmap(jnp.sum, out_axes=array.dims)(array)
+      expected = named_axes.NamedArray(data.sum(axis=1), ('x', 'z'))
+      assert_named_array_equal(actual, expected)
+
+    with self.subTest('multiple_outputs'):
+      actual_x, actual_sum = named_axes.nmap(
+          lambda x: (x, x.sum()), out_axes=('z', ..., 'x')
+      )(array)
+      expected_x = named_axes.NamedArray(
+          data.transpose(2, 1, 0), ('z', None, 'x')
+      )
+      expected_sum = named_axes.NamedArray(data.sum(axis=1).T, ('z', 'x'))
+      assert_named_array_equal(actual_x, expected_x)
+      assert_named_array_equal(actual_sum, expected_sum)
+
+    with self.subTest('multiple_inputs'):
+      other = named_axes.NamedArray(data.sum(axis=1).T, ('z', 'x'))
+      actual = named_axes.nmap(
+          lambda x, y: x * y, out_axes=array.dims
+      )(array, other)
+      expected = named_axes.NamedArray(
+          data * data.sum(axis=1, keepdims=True), ('x', None, 'z')
+      )
+      assert_named_array_equal(actual, expected)
+
+  def test_nmap_invalid_out_axes_template(self):
+    data = np.arange(2 * 3).reshape((2, 3))
+    array = named_axes.NamedArray(data, ('x', 'y'))
+    identity = lambda x: x
+
+    for out_axes in [('x',), ('x', 'y', 'y'), ('x', 'y', 'z')]:
+      with self.subTest(str(out_axes)):
+        with self.assertRaisesWithLiteralMatch(
+            ValueError,
+            f'out_axes={out_axes} must include each of the named dimensions '
+            "['x', 'y'] exactly once",
+        ):
+          named_axes.nmap(identity, out_axes=out_axes)(array)
+
+    with self.assertRaisesWithLiteralMatch(
+        ValueError,
+        "out_axes contains multiple ellipses (...): ('x', Ellipsis, 'y',"
+        ' Ellipsis)',
+    ):
+      named_axes.nmap(identity, out_axes=('x', ..., 'y', ...))(array)
+
+    with self.assertRaisesWithLiteralMatch(
+        ValueError,
+        "out_axes cannot contain both ... and None: ('x', Ellipsis, None, 'y')",
+    ):
+      named_axes.nmap(identity, out_axes=('x', ..., None, 'y'))(array)
+
+    with self.assertRaisesWithLiteralMatch(
+        TypeError,
+        "out_axes must only contain strings, ... or None, but got ('x', 0)",
+    ):
+      named_axes.nmap(identity, out_axes=('x', 0))(array)
+
+    with self.assertRaisesRegex(
+        ValueError,
+        re.escape(
+            "out_axes=('x', 'y') requires outputs of nmap(NAME) to have"
+            ' exactly 0 positional axes, but got an output with 1 positional'
+            ' axes.'
+        ).replace('NAME', '.+'),
+    ):
+      named_axes.nmap(lambda x: x[jnp.newaxis], out_axes=('x', 'y'))(array)
+
+    array = named_axes.NamedArray(np.zeros((2, 3, 4)), (None, 'x', None))
+    with self.assertRaisesRegex(
+        ValueError,
+        re.escape(
+            "out_axes=(None, 'x', None) requires outputs of nmap(NAME) to"
+            ' have exactly 2 positional axes, but got an output with 3'
+            ' positional axes.'
+        ).replace('NAME', '.+'),
+    ):
+      named_axes.nmap(lambda x: x[jnp.newaxis], out_axes=array.dims)(array)
 
   def test_vectorized_methods(self):
     data = np.arange(2 * 3 * 4).reshape((2, 3, 4))
