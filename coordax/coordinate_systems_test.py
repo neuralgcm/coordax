@@ -700,6 +700,15 @@ class CoordinateSystemsTest(parameterized.TestCase):
           cx.coordinates_from_xarray(data_array), cx.DummyAxis('x', size=2)
       )
 
+  def test_array_key_equality(self):
+    key = cx.coords.ArrayKey(np.arange(3))
+    self.assertEqual(key, cx.coords.ArrayKey(np.arange(3)))
+    self.assertEqual(hash(key), hash(cx.coords.ArrayKey(np.arange(3))))
+    self.assertNotEqual(key, cx.coords.ArrayKey(np.arange(4)))
+    self.assertNotEqual(key, cx.coords.ArrayKey(np.arange(3.0)))
+    self.assertNotEqual(key, 'x')
+    self.assertNotIn(key, ('x', None))
+
 
 if __name__ == '__main__':
   absltest.main()
