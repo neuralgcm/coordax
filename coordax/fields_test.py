@@ -1057,6 +1057,25 @@ class FieldTest(parameterized.TestCase):
     self.assertEqual(f_sel_y.dims, ('x', None, 'y'))
     self.assertEqual(f_sel_y.shape, (2, 3, 2))
 
+  def test_isel_with_multiple_positional_axes(self):
+    data = np.arange(2 * 3 * 4 * 5).reshape((2, 3, 4, 5))
+    field = coordax.field(data, None, 'x', None, 'y')
+
+    f_sel = field.isel(x=1, y=slice(1, 3))
+    testing.assert_fields_equal(
+        f_sel, coordax.field(data[:, 1, :, 1:3], None, None, 'y')
+    )
+
+  def test_sel_with_multiple_positional_axes(self):
+    x = coordax.LabeledAxis('x', np.array([10, 20, 30]))
+    data = np.arange(2 * 3 * 4).reshape((2, 3, 4))
+    field = coordax.field(data, None, x, None)
+
+    f_sel = field.sel(x=20)
+    testing.assert_fields_equal(
+        f_sel, coordax.field(data[:, 1, :], None, None)
+    )
+
   def test_deprecated_tmp_axis_name(self):
     with self.assertWarnsRegex(
         DeprecationWarning,
