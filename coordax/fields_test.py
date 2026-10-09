@@ -433,6 +433,27 @@ class FieldTest(parameterized.TestCase):
       actual = coordax.cmap(lambda x: x, out_axes='same_as_input')(field)
       testing.assert_fields_allclose(actual, expected)
 
+    with self.subTest('template'):
+      expected = coordax.field(data.transpose(2, 1, 0), z_axis, None, x_axis)
+      actual = coordax.cmap(lambda x: x, out_axes=('z', ..., 'x'))(field)
+      testing.assert_fields_allclose(actual, expected)
+
+  def test_cmap_out_axes_template_split_axis(self):
+    data = np.arange(2 * 6 * 4).reshape((2, 6, 4))
+    x_axis = coordax.LabeledAxis('x', np.arange(2))
+    z_axis = coordax.LabeledAxis('z', np.arange(4))
+    a_axis, b_axis = coordax.SizedAxis('a', 2), coordax.SizedAxis('b', 3)
+    field = coordax.field(data, x_axis, 'y', z_axis)
+
+    untagged = field.untag('y')
+    reshape = lambda x: x.reshape((2, 3))
+    actual = coordax.cmap(reshape, out_axes=untagged.dims)(untagged)
+    actual = actual.tag(a_axis, b_axis)
+    expected = coordax.field(
+        data.reshape((2, 2, 3, 4)), x_axis, a_axis, b_axis, z_axis
+    )
+    testing.assert_fields_allclose(actual, expected)
+
   def test_cpmap_example(self):
     data = np.arange(2 * 3 * 4).reshape((2, 3, 4))
     x_axis = coordax.LabeledAxis('x', np.arange(2))
