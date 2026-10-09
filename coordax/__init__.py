@@ -54,6 +54,9 @@ from coordax.ndarrays import (
     NDArray as NDArray,
     register_ndarray as register_ndarray,
 )
-import coordax.testing  # pylint: disable=unused-import
+try:
+  import coordax.testing  # pylint: disable=unused-import,g-import-not-at-top
+except ImportError:
+  pass
 
 __version__ = '0.2.8'  # keep sync with pyproject.toml
