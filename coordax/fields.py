@@ -122,7 +122,9 @@ def tmp_axis_name(field: Field, excluded_names: set[str] | None = None) -> str:
 def cmap(
     fun: Callable[..., Any],
     out_axes: (
-        dict[str, int] | Literal['leading', 'trailing', 'same_as_input']
+        dict[str, int]
+        | tuple[str | types.EllipsisType | None, ...]
+        | Literal['leading', 'trailing', 'same_as_input']
     ) = 'trailing',
     *,
     vmap: Callable = jax.vmap,  # pylint: disable=g-bare-generic
@@ -162,13 +164,26 @@ def cmap(
       - dict[str, int]: mapping from dimension name to axis position. Keys must
         include all named dimensions present in the inputs. Axis positions must
         be unique and either all positive or all negative.
+      - tuple of dimension names, ``None`` and ``...``: template for the
+        dimensions of every output, e.g., ``('x', ..., 'y')``, ``field.dims``
+        or ``coordinate.dims``. Must include all named dimensions present in the
+        inputs exactly once. Positional axes of the outputs are placed at the
+        location of ``...`` or ``None`` entries. If these are contiguous,
+        outputs may have any number of positional axes (e.g., if ``fun`` adds or
+        removes axes). Otherwise, outputs must have exactly one positional axis
+        per ``None``. Without ``...`` or ``None``, outputs cannot have
+        positional axes.
       - 'leading': dimension names will appear as the leading axes on every
         output, in order of their appearance on the inputs.
       - 'trailing': dimension names will appear as the trailing axes on every
         output, in order of their appearance on the inputs.
       - 'same_as_input': dimension names will appear in the same order as in the
-        inputs, where the inputs must all have the same named axes and the same
-        number of dimensions as the outputs.
+        inputs, and positional axes at the same location as on the inputs (or
+        trailing, if no inputs have positional axes). Inputs must all have the
+        same named dimensions in the same order, with positional axes at the
+        same location. If positional axes on the inputs are contiguous, ``fun``
+        may change their number. Otherwise, outputs must have the same number
+        of dimensions as the inputs.
 
     vmap: Vectorizing transformation to use when mapping over named axes.
       Defaults to ``jax.vmap``. A different implementation can be used to make
@@ -193,6 +208,20 @@ def cmap(
     ('x', 'y', None)
     >>> cx.cmap(jnp.sin, out_axes='same_as_input')(field).dims
     ('x', None, 'y')
+
+    A template of dimensions specifies the order of named dimensions and the
+    location of positional axes on the outputs, even if ``fun`` changes the
+    number of positional axes:
+
+    >>> x = cx.field(jnp.ones((2, 3, 4)), 'x', 'y', 'z').untag('y')
+    >>> x.dims
+    ('x', None, 'z')
+    >>> cx.cmap(lambda v: jnp.outer(v, v), out_axes=x.dims)(x).dims
+    ('x', None, None, 'z')
+    >>> cx.cmap(jnp.sum, out_axes=x.dims)(x).dims
+    ('x', 'z')
+    >>> cx.cmap(lambda v: jnp.outer(v, v), out_axes=('z', ..., 'x'))(x).dims
+    ('z', None, None, 'x')
 
     Multiple field arguments result in all input axes in the outputs, in order
     of appearence:
@@ -237,8 +266,10 @@ def cpmap(
 
   ``cpmap(fun)`` is an alias for ``cmap(fun, out_axes='same_as_input')``.
 
-  Primary use case is applying a function over positional axes while preserving
-  the dimensionality and the coordinate order.
+  Primary use case is applying a function over positional axes "in place",
+  while preserving the order of coordinate dimensions. Positional axes of the
+  outputs are placed at the location of positional axes on the inputs, so
+  ``fun`` may also change their number, e.g., by reducing or reshaping axes.
 
   Args:
     fun: Function to apply over positional axes of the inputs.
@@ -258,6 +289,10 @@ def cpmap(
     >>> field = cx.field(jnp.ones((2, 3, 4)), 'x', None, 'y')
     >>> cx.cpmap(lambda x: x**2)(field).dims
     ('x', None, 'y')
+    >>> cx.cpmap(lambda x: jnp.outer(x, x))(field).dims
+    ('x', None, None, 'y')
+    >>> cx.cpmap(jnp.sum)(field).dims
+    ('x', 'y')
 
     ``cpmap`` requires all inputs to have the same named axes ordering:
 
@@ -267,8 +302,9 @@ def cpmap(
     Traceback (most recent call last):
     ...
     ValueError: 'same_as_input' for out_axes requires all NamedArray inputs with
-    named axes to have the same named_axes. Found multiple distinct
-    named_axes on inputs:
+    named axes to have the same named dimensions in the same order, with
+    positional axes at the same location. Found multiple distinct named_axes
+    on inputs:
     [{'x': 0, 'y': 1}, {'y': 0, 'x': 1}]
 
   See also:
@@ -281,9 +317,7 @@ def _cmap_with_doc(
     fun: Callable[..., Any],
     fun_name: str,
     fun_doc: str | None = None,
-    out_axes: (
-        dict[str, int] | Literal['leading', 'trailing', 'same_as_input']
-    ) = 'trailing',
+    out_axes: named_axes_lib.OutAxes = 'trailing',
     *,
     vmap: Callable = jax.vmap,  # pylint: disable=g-bare-generic
 ) -> Callable[..., Any]:
