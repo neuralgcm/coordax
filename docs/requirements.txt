@@ -8,4 +8,5 @@ matplotlib==3.10.6
 
 # optional coordax requirements
 chex
+jax-datetime
 xarray

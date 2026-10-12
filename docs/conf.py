@@ -41,7 +41,7 @@ subprocess.run([sys.executable, '-m', 'pip', 'list'])
 print(f'coordax: {coordax.__version__}, {coordax.__file__}')
 # -- Project information -----------------------------------------------------
 project = 'Coordax'
-copyright = '2025, Google LCC'
+copyright = '2025, Google LLC'  # pylint: disable=redefined-builtin
 author = 'Coordax authors'
 # -- General configuration ---------------------------------------------------
 
