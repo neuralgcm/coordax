@@ -49,6 +49,9 @@ from coordax.fields import (
     wrap as wrap,  # deprecated
     tag as tag,
     untag as untag,
+    take as take,
+    put as put,
+    reduce as reduce,
 )
 from coordax.ndarrays import (
     NDArray as NDArray,

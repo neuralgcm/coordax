@@ -1489,3 +1489,273 @@ def untag(
   else:
     untag_fn = lambda x: x.untag(*dims) if is_field(x) else x
   return jax.tree.map(untag_fn, tree, is_leaf=is_field)
+
+
+@utils.export
+def take(
+    tree: PyTree,
+    dim: str | Coordinate,
+    index: Field | ArrayLike,
+    *,
+    mode: str | None = None,
+    unique_indices: bool = False,
+    indices_are_sorted: bool = False,
+    fill_value: bool | int | float | complex | np.number | None = None,
+) -> PyTree:
+  """Gathers elements along a 1D dimension ``dim`` at ``index``.
+
+  Unlike :meth:`coordax.Field.isel`, ``take`` supports traced (dynamic) or
+  ``Field``-valued indices by vectorizing over shared named dimensions of the
+  input and ``index``. The indexed dimension ``dim`` is removed (or replaced in
+  place by any positional dimensions of ``index``), while all other dimensions
+  of each input ``Field`` keep their original order. Any named dimension on
+  ``index`` that is not present on the input ``Field`` (after untagging ``dim``)
+  raises a ``ValueError`` instead of silently broadcasting.
+
+  Args:
+    tree: A ``Field`` or PyTree of ``Field``s to gather from.
+    dim: Name or 1D ``Coordinate`` of the dimension to gather along.
+    index: Integer index or ``Field`` of indices.
+    mode: Out-of-bounds indexing mode forwarded to ``jax.Array.at[...].get``
+      (e.g., ``'promise_in_bounds'``, ``'clip'``, ``'drop'``, ``'fill'``).
+    unique_indices: Whether indices are guaranteed to be unique.
+    indices_are_sorted: Whether indices are guaranteed to be sorted.
+    fill_value: Fill value to return for out-of-bounds indices when
+      ``mode='fill'``.
+
+  Returns:
+    A new ``Field`` or PyTree of ``Field``s with elements gathered along
+    ``dim``.
+
+  Examples:
+    >>> import coordax as cx
+    >>> import jax.numpy as jnp
+    >>> f = cx.field(jnp.arange(12).reshape(2, 3, 2), 'x', 'y', 'z')
+    >>> idx = cx.field(jnp.array([2, 0]), 'x')
+    >>> cx.take(f, 'y', idx)
+    <Field dims=('x', 'z') shape=(2, 2) axes={} >
+    >>> cx.take(f, 'y', idx).data
+    Array([[4, 5],
+           [6, 7]], dtype=int32)
+
+  See also:
+    :func:`coordax.put`
+    :meth:`coordax.Field.isel`
+  """
+  dim_names = _dimension_names(dim)
+  if len(dim_names) != 1:
+    raise ValueError(
+        f'take expects a single 1D dimension or coordinate for dim, got {dim!r}'
+    )
+  if not is_field(index):
+    index = jnp.asarray(index)
+
+  def _take_fn(x: jax.Array, i: jax.Array) -> jax.Array:
+    if (
+        mode is None
+        and not unique_indices
+        and not indices_are_sorted
+        and fill_value is None
+    ):
+      return x[i]
+    return x.at[i].get(
+        mode=mode,
+        unique_indices=unique_indices,
+        indices_are_sorted=indices_are_sorted,
+        fill_value=fill_value,
+    )
+
+  excluded = set(index.named_dims) if is_field(index) else set()
+
+  def _take_leaf(f: Any) -> Any:
+    if not is_field(f):
+      return f
+    tmp_axes = []
+    for _ in f.positional_shape:
+      tmp_axes.append(new_axis_name(f, excluded_names=excluded | set(tmp_axes)))
+    if tmp_axes:
+      f = f.tag(*tmp_axes)
+    untagged = f.untag(dim)
+    out_axes = tuple(... if d is None else d for d in untagged.dims)
+    result = cmap(_take_fn, out_axes=out_axes)(untagged, index)
+    if tmp_axes:
+      result = result.untag(*tmp_axes)
+    return result
+
+  return jax.tree.map(_take_leaf, tree, is_leaf=is_field)
+
+
+@utils.export
+def put(
+    tree: PyTree,
+    dim: str | Coordinate,
+    index: Field | ArrayLike,
+    values: PyTree,
+    *,
+    mode: str | None = None,
+    unique_indices: bool = False,
+    indices_are_sorted: bool = False,
+) -> PyTree:
+  """Sets ``values`` along a 1D dimension ``dim`` at ``index``.
+
+  Vectorizes ``x.at[index].set(values, ...)`` over shared named dimensions while
+  preserving the dimension order and coordinates of each ``Field`` in ``tree``.
+  Any named dimension on ``index`` or ``values`` that is not present on the
+  target ``Field`` (after untagging ``dim``) raises a ``ValueError`` instead of
+  silently broadcasting.
+
+  Args:
+    tree: A ``Field`` or PyTree of ``Field``s to update.
+    dim: Name or 1D ``Coordinate`` of the dimension to update along.
+    index: Integer index or ``Field`` of indices along ``dim``.
+    values: A ``Field``, array-like, or PyTree matching ``tree`` with values to
+      write at ``index``.
+    mode: Out-of-bounds indexing mode forwarded to ``jax.Array.at[...].set``
+      (e.g., ``'promise_in_bounds'``, ``'clip'``, ``'drop'``).
+    unique_indices: Whether indices are guaranteed to be unique.
+    indices_are_sorted: Whether indices are guaranteed to be sorted.
+
+  Returns:
+    A new ``Field`` or PyTree of ``Field``s with updated values along ``dim``.
+
+  Examples:
+    >>> import coordax as cx
+    >>> import jax.numpy as jnp
+    >>> tape = cx.field(jnp.zeros((3, 2)), cx.SizedAxis('step', 3), 'x')
+    >>> draw = cx.field(jnp.array([10., 20.]), 'x')
+    >>> cx.put(tape, 'step', cx.field(1), draw, mode='drop').data
+    Array([[ 0.,  0.],
+           [10., 20.],
+           [ 0.,  0.]], dtype=float32)
+
+  See also:
+    :func:`coordax.take`
+  """
+  dim_names = _dimension_names(dim)
+  if len(dim_names) != 1:
+    raise ValueError(
+        f'put expects a single 1D dimension or coordinate for dim, got {dim!r}'
+    )
+  [dim_name] = dim_names
+  assert isinstance(dim_name, str)
+  if not is_field(index):
+    index = jnp.asarray(index)
+
+  def _put_fn(x: jax.Array, i: jax.Array, v: jax.Array) -> jax.Array:
+    return x.at[i].set(
+        v,
+        mode=mode,
+        unique_indices=unique_indices,
+        indices_are_sorted=indices_are_sorted,
+    )
+
+  index_dims = set(index.named_dims) if is_field(index) else set()
+
+  def _put_leaf(f: Any, val: Any) -> Any:
+    if not is_field(f):
+      return f
+    if not is_field(val):
+      val = jnp.asarray(val)
+      val_dims = set()
+    else:
+      val_dims = set(val.named_dims)
+    excluded = index_dims | val_dims
+    tmp_axes = []
+    for _ in f.positional_shape:
+      tmp_axes.append(new_axis_name(f, excluded_names=excluded | set(tmp_axes)))
+    if tmp_axes:
+      f = f.tag(*tmp_axes)
+    axis_to_tag = f.axes.get(dim_name, dim_name)
+    untagged = f.untag(dim)
+    updated = cmap(_put_fn, out_axes=untagged.dims)(
+        untagged, index, val
+    ).tag(axis_to_tag)
+    if tmp_axes:
+      updated = updated.untag(*tmp_axes)
+    return updated
+
+  return jax.tree.map(_put_leaf, tree, values, is_leaf=is_field)
+
+
+@utils.export
+def reduce(
+    fun: Callable[..., Any],
+    tree: PyTree,
+    *dims: str | Coordinate,
+    allow_missing: bool = False,
+) -> PyTree:
+  """Reduces ``tree`` over ``dims`` using ``fun``, regardless of ``dims`` order.
+
+  Untags ``dims`` in the order they appear on each ``Field`` in ``tree`` and
+  applies ``fun`` across those positional axes while preserving the order of
+  all remaining dimensions.
+
+  Args:
+    fun: Reduction function to apply to the untagged axes (e.g., ``jnp.mean``,
+      ``jnp.all``, ``jnp.any``). Must reduce all untagged axes to a scalar.
+    tree: A ``Field`` or PyTree of ``Field``s to reduce.
+    *dims: Dimension names or ``Coordinate``s to reduce over, in any order.
+    allow_missing: If True, only reduces over dimensions/coordinates in ``dims``
+      that are present on each ``Field``.
+
+  Returns:
+    A new ``Field`` or PyTree of ``Field``s with ``dims`` reduced.
+
+  Examples:
+    >>> import coordax as cx
+    >>> import jax.numpy as jnp
+    >>> f = cx.field(jnp.ones((2, 3, 4)), 'x', 'y', 'z')
+    >>> cx.reduce(jnp.sum, f, 'z', 'x')
+    <Field dims=('y',) shape=(3,) axes={} >
+    >>> cx.reduce(jnp.mean, f, 'w', 'z', allow_missing=True)
+    <Field dims=('x', 'y') shape=(2, 3) axes={} >
+
+  See also:
+    :func:`coordax.cmap`
+    :func:`coordax.untag`
+  """
+
+  def _reduce_leaf(f: Any) -> Any:
+    if not is_field(f):
+      return f
+    axes_or_names = []
+    for d in dims:
+      if isinstance(d, Coordinate):
+        axes_or_names.extend(d.axes)
+      else:
+        axes_or_names.append(d)
+    if allow_missing:
+      coords_to_validate = [
+          c
+          for c in axes_or_names
+          if isinstance(c, Coordinate) and c.dims[0] in f.named_dims
+      ]
+      f._validate_matching_coords(coords_to_validate)  # pylint: disable=protected-access
+      target_items = [c for c in axes_or_names if contains_dims(f, c)]
+    else:
+      f._validate_matching_coords(dims)  # pylint: disable=protected-access
+      target_items = axes_or_names
+    target_dim_names = _dimension_names(*target_items)
+    if not allow_missing:
+      if any(d not in f.named_shape for d in target_dim_names):
+        raise ValueError(
+            f'cannot reduce over {target_dim_names} because they are not a '
+            f'subset of the current named dimensions {f.named_dims}'
+        )
+    target_set = set(target_dim_names)
+    ordered_dims = [d for d in f.named_dims if d in target_set]
+    if not ordered_dims:
+      return f
+    tmp_axes = []
+    for _ in f.positional_shape:
+      tmp_axes.append(new_axis_name(f, excluded_names=set(tmp_axes)))
+    if tmp_axes:
+      f = f.tag(*tmp_axes)
+    untagged = f.untag(*ordered_dims)
+    reduced = cmap(fun, out_axes=untagged.named_dims)(untagged)
+    if tmp_axes:
+      reduced = reduced.untag(*tmp_axes)
+    return reduced
+
+  return jax.tree.map(_reduce_leaf, tree, is_leaf=is_field)
+

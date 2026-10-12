@@ -1155,6 +1155,175 @@ class FieldTest(parameterized.TestCase):
     expected = coordax.field(array, other.coordinate)
     testing.assert_fields_equal(actual, expected)
 
+  def test_take(self):
+    x = coordax.SizedAxis('x', 2)
+    y = coordax.SizedAxis('y', 3)
+    z = coordax.SizedAxis('z', 4)
+    data = jnp.arange(24).reshape((2, 3, 4))
+    field = coordax.field(data, x, y, z)
+
+    with self.subTest('scalar_index'):
+      actual = coordax.take(field, 'y', coordax.field(1))
+      expected = coordax.field(data[:, 1, :], x, z)
+      testing.assert_fields_equal(actual, expected)
+      testing.assert_fields_equal(coordax.take(field, y, 1), expected)
+
+    with self.subTest('batched_field_index_preserves_field_order'):
+      # Index has ('z', 'x'); output must keep field's ('x', 'z') order.
+      idx_data = jnp.array([[0, 2], [1, 0], [2, 1], [0, 1]])  # shape (4, 2)
+      idx = coordax.field(idx_data, z, x)
+      actual = coordax.take(field, y, idx)
+      expected_data = jnp.stack(
+          [
+              jnp.stack([data[i, idx_data[k, i], k] for k in range(4)])
+              for i in range(2)
+          ],
+          axis=0,
+      )
+      expected = coordax.field(expected_data, x, z)
+      testing.assert_fields_equal(actual, expected)
+
+    with self.subTest('positional_index_inserted_in_place'):
+      actual = coordax.take(field, 'y', [2, 0])
+      expected = coordax.field(data[:, [2, 0], :], x, None, z)
+      testing.assert_fields_equal(actual, expected)
+
+    with self.subTest('field_with_existing_positional_axes'):
+      pos_field = coordax.field(data, None, y, z)
+      idx = coordax.field(jnp.array([2, 0, 1, 2]), z)
+      actual = coordax.take(pos_field, y, idx)
+      expected_data = jnp.stack([data[:, idx.data[k], k] for k in range(4)], -1)
+      expected = coordax.field(expected_data, None, z)
+      testing.assert_fields_equal(actual, expected)
+
+    with self.subTest('pytree_and_mode'):
+      tree = {'a': field, 'b': field + 100}
+      actual = coordax.take(tree, 'y', 10, mode='fill', fill_value=-1)
+      expected_a = coordax.field(jnp.full((2, 4), -1, dtype=data.dtype), x, z)
+      testing.assert_fields_equal(actual['a'], expected_a)
+      testing.assert_fields_equal(actual['b'], expected_a)
+
+    with self.subTest('extra_index_dim_raises'):
+      bad_idx = coordax.field(jnp.zeros((2, 5), dtype=jnp.int32), x, 'extra')
+      with self.assertRaisesRegex(ValueError, 'extra'):
+        coordax.take(field, 'y', bad_idx)
+
+    with self.subTest('non_1d_dim_raises'):
+      xy = coordax.coords.compose(x, y)
+      with self.assertRaisesRegex(ValueError, 'single 1D dimension'):
+        coordax.take(field, xy, 0)
+
+  def test_put(self):
+    x = coordax.SizedAxis('x', 2)
+    y = coordax.SizedAxis('y', 3)
+    z = coordax.SizedAxis('z', 4)
+    field = coordax.field(jnp.zeros((2, 3, 4), dtype=jnp.int32), x, y, z)
+
+    with self.subTest('scalar_index_and_transposed_values'):
+      # Values have dims ('z', 'x'); output must preserve ('x', 'y', 'z').
+      vals_zx = jnp.arange(1, 9, dtype=jnp.int32).reshape((4, 2))
+      values = coordax.field(vals_zx, z, x)
+      actual = coordax.put(field, y, coordax.field(1), values)
+      expected_data = jnp.zeros((2, 3, 4), dtype=jnp.int32).at[:, 1, :].set(
+          vals_zx.T
+      )
+      expected = coordax.field(expected_data, x, y, z)
+      testing.assert_fields_equal(actual, expected)
+
+    with self.subTest('mode_drop_out_of_bounds'):
+      values = coordax.field(jnp.ones((2, 4), dtype=jnp.int32), x, z)
+      actual = coordax.put(field, y, coordax.field(5), values, mode='drop')
+      testing.assert_fields_equal(actual, field)
+
+    with self.subTest('batched_index_and_pytree'):
+      idx = coordax.field(jnp.array([0, 2]), x)
+      val_data = jnp.arange(1, 9, dtype=jnp.int32).reshape((2, 4))
+      val = coordax.field(val_data, x, z)
+      tree = {'f': field}
+      actual = coordax.put(tree, 'y', idx, {'f': val})
+      expected_data = (
+          jnp.zeros((2, 3, 4), dtype=jnp.int32)
+          .at[0, 0, :]
+          .set(val_data[0])
+          .at[1, 2, :]
+          .set(val_data[1])
+      )
+      testing.assert_fields_equal(
+          actual['f'], coordax.field(expected_data, x, y, z)
+      )
+
+    with self.subTest('field_with_existing_positional_axes'):
+      pos_field = coordax.field(
+          jnp.zeros((2, 3, 4), dtype=jnp.int32), None, y, z
+      )
+      actual = coordax.put(pos_field, y, 2, 9)
+      expected_data = jnp.zeros((2, 3, 4), dtype=jnp.int32).at[:, 2, :].set(9)
+      testing.assert_fields_equal(
+          actual, coordax.field(expected_data, None, y, z)
+      )
+
+    with self.subTest('extra_dim_on_values_or_index_raises'):
+      bad_val = coordax.field(jnp.ones((2, 4, 5), dtype=jnp.int32), x, z, 'w')
+      with self.assertRaisesRegex(ValueError, 'w'):
+        coordax.put(field, 'y', 0, bad_val)
+
+  def test_reduce(self):
+    x = coordax.SizedAxis('x', 2)
+    y = coordax.SizedAxis('y', 3)
+    z = coordax.SizedAxis('z', 4)
+    data = jnp.arange(24, dtype=jnp.float32).reshape((2, 3, 4))
+    field = coordax.field(data, x, y, z)
+
+    with self.subTest('order_insensitive_dims_and_coords'):
+      actual_str = coordax.reduce(jnp.sum, field, 'z', 'x')
+      actual_coord = coordax.reduce(jnp.sum, field, z, x)
+      actual_product = coordax.reduce(
+          jnp.sum, field, coordax.coords.compose(z, x)
+      )
+      expected = coordax.field(jnp.sum(data, axis=(0, 2)), y)
+      testing.assert_fields_equal(actual_str, expected)
+      testing.assert_fields_equal(actual_coord, expected)
+      testing.assert_fields_equal(actual_product, expected)
+
+    with self.subTest('allow_missing_on_pytree'):
+      f_xy = coordax.field(jnp.ones((2, 3)), x, y)
+      f_z = coordax.field(jnp.ones((4,)), z)
+      tree = {'xy': f_xy, 'z': f_z}
+      actual = coordax.reduce(jnp.sum, tree, 'y', 'w', allow_missing=True)
+      testing.assert_fields_equal(
+          actual['xy'], coordax.field(jnp.full((2,), 3.0), x)
+      )
+      testing.assert_fields_equal(actual['z'], f_z)
+
+    with self.subTest('allow_missing_partial_multidim_coord'):
+      xy = coordax.coords.compose(x, y)
+      f_x_only = coordax.field(jnp.array([1.0, 2.0]), x)
+      actual = coordax.reduce(jnp.sum, f_x_only, xy, allow_missing=True)
+      testing.assert_fields_equal(actual, coordax.field(jnp.array(3.0)))
+      wrong_xy = coordax.coords.compose(coordax.SizedAxis('x', 99), y)
+      with self.assertRaisesRegex(ValueError, 'coordinate not equal'):
+        coordax.reduce(jnp.sum, f_x_only, wrong_xy, allow_missing=True)
+
+    with self.subTest('allow_missing_false_raises_on_missing'):
+      with self.assertRaisesRegex(ValueError, 'not a subset'):
+        coordax.reduce(jnp.sum, field, 'w')
+
+    with self.subTest('mismatched_coordinate_raises_even_with_allow_missing'):
+      wrong_x = coordax.SizedAxis('x', 99)
+      with self.assertRaisesRegex(ValueError, 'coordinate not equal'):
+        coordax.reduce(jnp.sum, field, wrong_x, allow_missing=True)
+
+    with self.subTest('field_with_existing_positional_axes'):
+      pos_field = coordax.field(data, None, y, None)
+      actual = coordax.reduce(jnp.mean, pos_field, y)
+      expected = coordax.field(jnp.mean(data, axis=1), None, None)
+      testing.assert_fields_equal(actual, expected)
+
+    with self.subTest('non_reducing_fun_raises'):
+      with self.assertRaisesRegex(ValueError, '0 positional axes'):
+        coordax.reduce(lambda v: v, field, 'y')
+
 
 if __name__ == '__main__':
   absltest.main()
+
