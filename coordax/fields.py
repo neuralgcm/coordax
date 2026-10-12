@@ -940,11 +940,12 @@ class Field:
 
     dim_names = _dimension_names(*indexers.keys())
     f = self
-    n_positional = len(f.positional_shape)
+    # Temporarily name positional axes, so that the coordinate covers all axes.
     tmp_axes = []
-    if n_positional > 0:
-      tmp_axes.append(new_axis_name(f))
-      f = f.tag(tmp_axes[-1])
+    for _ in f.positional_shape:
+      tmp_axes.append(new_axis_name(f, excluded_names=set(tmp_axes)))
+    if tmp_axes:
+      f = f.tag(*tmp_axes)
 
     for dim, indexer in zip(dim_names, indexers.values(), strict=True):
       post_slice_coord = f.coordinate.isel({dim: indexer})  # pyrefly: ignore[bad-assignment]

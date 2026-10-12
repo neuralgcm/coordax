@@ -363,9 +363,10 @@ class ArrayKey:
   value: np.ndarray
 
   def __eq__(self, other):
+    if not isinstance(other, ArrayKey):
+      return NotImplemented
     return (
-        isinstance(self, ArrayKey)
-        and self.value.dtype == other.value.dtype
+        self.value.dtype == other.value.dtype
         and self.value.shape == other.value.shape
         and (self.value == other.value).all()
     )
