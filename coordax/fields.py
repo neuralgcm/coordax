@@ -177,8 +177,12 @@ def cmap(
       - 'trailing': dimension names will appear as the trailing axes on every
         output, in order of their appearance on the inputs.
       - 'same_as_input': dimension names will appear in the same order as in the
-        inputs, where the inputs must all have the same named axes and the same
-        number of dimensions as the outputs.
+        inputs, and positional axes at the same location as on the inputs (or
+        trailing, if no inputs have positional axes). Inputs must all have the
+        same named dimensions in the same order, with positional axes at the
+        same location. If positional axes on the inputs are contiguous, ``fun``
+        may change their number. Otherwise, outputs must have the same number
+        of dimensions as the inputs.
 
     vmap: Vectorizing transformation to use when mapping over named axes.
       Defaults to ``jax.vmap``. A different implementation can be used to make
@@ -260,8 +264,10 @@ def cpmap(
 
   ``cpmap(fun)`` is an alias for ``cmap(fun, out_axes='same_as_input')``.
 
-  Primary use case is applying a function over positional axes while preserving
-  the dimensionality and the coordinate order.
+  Primary use case is applying a function over positional axes "in place",
+  while preserving the order of coordinate dimensions. Positional axes of the
+  outputs are placed at the location of positional axes on the inputs, so
+  ``fun`` may also change their number, e.g., by reducing or reshaping axes.
 
   Args:
     fun: Function to apply over positional axes of the inputs.
@@ -281,6 +287,10 @@ def cpmap(
     >>> field = cx.field(jnp.ones((2, 3, 4)), 'x', None, 'y')
     >>> cx.cpmap(lambda x: x**2)(field).dims
     ('x', None, 'y')
+    >>> cx.cpmap(lambda x: jnp.outer(x, x))(field).dims
+    ('x', None, None, 'y')
+    >>> cx.cpmap(jnp.sum)(field).dims
+    ('x', 'y')
 
     ``cpmap`` requires all inputs to have the same named axes ordering:
 
@@ -290,8 +300,9 @@ def cpmap(
     Traceback (most recent call last):
     ...
     ValueError: 'same_as_input' for out_axes requires all NamedArray inputs with
-    named axes to have the same named_axes. Found multiple distinct
-    named_axes on inputs:
+    named axes to have the same named dimensions in the same order, with
+    positional axes at the same location. Found multiple distinct named_axes
+    on inputs:
     [{'x': 0, 'y': 1}, {'y': 0, 'x': 1}]
 
   See also:

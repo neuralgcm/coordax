@@ -469,6 +469,26 @@ class FieldTest(parameterized.TestCase):
     expected = coordax.field(expected_data, x_axis, None, y_axis)
     testing.assert_fields_allclose(actual, expected)
 
+  def test_cpmap_changes_positional_ndim(self):
+    data = np.arange(2 * 6 * 4).reshape((2, 6, 4))
+    x_axis = coordax.LabeledAxis('x', np.arange(2))
+    z_axis = coordax.LabeledAxis('z', np.arange(4))
+    a_axis, b_axis = coordax.SizedAxis('a', 2), coordax.SizedAxis('b', 3)
+    field = coordax.field(data, x_axis, 'y', z_axis)
+
+    with self.subTest('split_axis'):
+      reshape = lambda x: x.reshape((2, 3))
+      actual = coordax.cpmap(reshape)(field.untag('y')).tag(a_axis, b_axis)
+      expected = coordax.field(
+          data.reshape((2, 2, 3, 4)), x_axis, a_axis, b_axis, z_axis
+      )
+      testing.assert_fields_allclose(actual, expected)
+
+    with self.subTest('reduce_axis'):
+      actual = coordax.cpmap(jnp.sum)(field.untag('y'))
+      expected = coordax.field(data.sum(axis=1), x_axis, z_axis)
+      testing.assert_fields_allclose(actual, expected)
+
   def test_jit(self):
     trace_count = 0
 

@@ -275,6 +275,40 @@ def _out_axes_from_template(
   }, positional_ndim
 
 
+def _same_as_input_template(
+    named_arrays: list[NamedArray],
+) -> tuple[str | types.EllipsisType, ...] | None:
+  """Returns a template of dimensions shared by all inputs, if one exists.
+
+  A shared template exists if all inputs have the same named dimensions in the
+  same order, and positional axes on inputs (if any) form a contiguous block at
+  the same location relative to named dimensions. Inputs without positional
+  axes are compatible with any location of positional axes, which are trailing
+  if no input has positional axes.
+
+  Args:
+    named_arrays: NamedArray inputs with at least one named dimension.
+
+  Returns:
+    Template of dimensions with ``...`` at the location of positional axes, or
+    ``None`` if no shared template exists.
+  """
+  named_dims = named_arrays[0].named_dims
+  if any(arr.named_dims != named_dims for arr in named_arrays):
+    return None
+  locations = set()
+  for arr in named_arrays:
+    positional = [i for i, dim in enumerate(arr.dims) if dim is None]
+    if positional:
+      if positional[-1] - positional[0] + 1 != len(positional):
+        return None
+      locations.add(positional[0])
+  if len(locations) > 1:
+    return None
+  location = locations.pop() if locations else len(named_dims)
+  return named_dims[:location] + (...,) + named_dims[location:]
+
+
 def _normalize_out_axes(
     out_axes: OutAxes,
     named_shape: dict[str, int],
@@ -305,6 +339,12 @@ def _normalize_out_axes(
       named_arrays_with_axes = [arr for arr in named_arrays if arr.named_axes]
       if not named_arrays_with_axes:
         return {}, None
+      template = _same_as_input_template(named_arrays_with_axes)
+      if template is not None:
+        return _out_axes_from_template(template, named_shape)
+      # Without a shared template, inputs are either incompatible (raised
+      # below) or have non-contiguous positional axes, in which case we keep
+      # named axes at their exact positions.
       unique_named_axes = {
           tuple(sorted(arr.named_axes.items()))
           for arr in named_arrays_with_axes
@@ -313,7 +353,8 @@ def _normalize_out_axes(
         named_axes_list = [arr.named_axes for arr in named_arrays_with_axes]
         raise ValueError(
             "'same_as_input' for out_axes requires all NamedArray inputs with"
-            ' named axes to have the same named_axes. Found multiple'
+            ' named axes to have the same named dimensions in the same order,'
+            ' with positional axes at the same location. Found multiple'
             f' distinct named_axes on inputs:\n{named_axes_list}'
         )
       [unique_named_axes] = unique_named_axes
@@ -425,7 +466,12 @@ def nmap(
       - 'trailing': dimension names will appear as the trailing axes on every
         output, in order of their appearance on the inputs.
       - 'same_as_input': dimension names will appear in the same order as in the
-        inputs, where the inputs must all have the same named axes.
+        inputs, and positional axes at the same location as on the inputs (or
+        trailing, if no inputs have positional axes). Inputs must all have the
+        same named dimensions in the same order, with positional axes at the
+        same location. If positional axes on the inputs are contiguous, ``fun``
+        may change their number. Otherwise, outputs must have the same number
+        of dimensions as the inputs.
     vmap: Vectorizing transformation to use when mapping over named axes.
       Defaults to jax.vmap. A different implementation can be used to make
       coordax compatible with custom objects (e.g. neural net modules).

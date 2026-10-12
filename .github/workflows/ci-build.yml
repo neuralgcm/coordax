@@ -9,6 +9,10 @@ on:
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   pytest-job:
     name: "python ${{ matrix.python-version }} (${{ matrix.variant }})"
@@ -24,11 +28,6 @@ jobs:
           - variant: "min dependencies"
             extras: "tests"
     steps:
-    - name: Cancel previous
-      uses: styfle/cancel-workflow-action@0.7.0
-      with:
-        access_token: ${{ github.token }}
-      if: ${{ github.ref != 'refs/heads/main' }}
     - uses: actions/checkout@v4
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
