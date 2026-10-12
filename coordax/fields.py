@@ -122,7 +122,9 @@ def tmp_axis_name(field: Field, excluded_names: set[str] | None = None) -> str:
 def cmap(
     fun: Callable[..., Any],
     out_axes: (
-        dict[str, int] | Literal['leading', 'trailing', 'same_as_input']
+        dict[str, int]
+        | tuple[str | types.EllipsisType | None, ...]
+        | Literal['leading', 'trailing', 'same_as_input']
     ) = 'trailing',
     *,
     vmap: Callable = jax.vmap,  # pylint: disable=g-bare-generic
@@ -162,6 +164,14 @@ def cmap(
       - dict[str, int]: mapping from dimension name to axis position. Keys must
         include all named dimensions present in the inputs. Axis positions must
         be unique and either all positive or all negative.
+      - tuple of dimension names, ``None`` and ``...``: template for the
+        dimensions of every output, e.g., ``('x', ..., 'y')``, ``field.dims``
+        or ``coordinate.dims``. Must include all named dimensions present in the
+        inputs exactly once. Positional axes of the outputs are placed at the
+        location of ``...`` or ``None`` entries: ``...`` matches any number of
+        positional axes (e.g., if ``fun`` adds or removes axes), whereas each
+        ``None`` matches exactly one positional axis. Without ``...`` or
+        ``None``, outputs cannot have positional axes.
       - 'leading': dimension names will appear as the leading axes on every
         output, in order of their appearance on the inputs.
       - 'trailing': dimension names will appear as the trailing axes on every
@@ -193,6 +203,19 @@ def cmap(
     ('x', 'y', None)
     >>> cx.cmap(jnp.sin, out_axes='same_as_input')(field).dims
     ('x', None, 'y')
+
+    A template of dimensions specifies the order of named dimensions and the
+    location of positional axes on the outputs:
+
+    >>> x = cx.field(jnp.ones((2, 3, 4)), 'x', 'y', 'z').untag('y')
+    >>> x.dims
+    ('x', None, 'z')
+    >>> cx.cmap(jnp.sin, out_axes=x.dims)(x).dims
+    ('x', None, 'z')
+    >>> cx.cmap(lambda v: jnp.outer(v, v), out_axes=('z', ..., 'x'))(x).dims
+    ('z', None, None, 'x')
+    >>> cx.cmap(jnp.sum, out_axes=('x', ..., 'z'))(x).dims
+    ('x', 'z')
 
     Multiple field arguments result in all input axes in the outputs, in order
     of appearence:
@@ -281,9 +304,7 @@ def _cmap_with_doc(
     fun: Callable[..., Any],
     fun_name: str,
     fun_doc: str | None = None,
-    out_axes: (
-        dict[str, int] | Literal['leading', 'trailing', 'same_as_input']
-    ) = 'trailing',
+    out_axes: named_axes_lib.OutAxes = 'trailing',
     *,
     vmap: Callable = jax.vmap,  # pylint: disable=g-bare-generic
 ) -> Callable[..., Any]:
