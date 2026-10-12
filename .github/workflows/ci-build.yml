@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.14"]
+        python-version: ["3.12", "3.14"]
         variant: ["all dependencies", "min dependencies"]
         include:
           - variant: "all dependencies"
@@ -28,7 +28,7 @@ jobs:
       uses: styfle/cancel-workflow-action@0.7.0
       with:
         access_token: ${{ github.token }}
-      if: ${{ github.ref != 'refs/head/main' }}
+      if: ${{ github.ref != 'refs/heads/main' }}
     - uses: actions/checkout@v4
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
@@ -37,6 +37,8 @@ jobs:
         cache: 'pip'
     - name: Install Coordax (${{ matrix.variant }})
       run: |
+        pip install -e .
+        python -c "import coordax"
         pip install -e .[${{ matrix.extras }}]
     - name: Run unit tests
       run: |
